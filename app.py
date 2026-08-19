@@ -37,6 +37,7 @@ HEDEF_FONLAR = ["TLY", "THF", "DUH", "PHE", "DHV", "DOH", "PCS", "PUK", "KPC", "
 # ⛔ TOKSİK VE RİSKLİ ŞİRKETLER KARA LİSTESİ (Konkordato, Gözaltı/YİP vb. Doğrudan Yasaklı)
 KARA_LISTE = {"BARMA", "MEGAP", "YESIL", "AVOD", "DERAS", "KENT", "KUVVA", "ISBIR", "ROYAL"}
 
+# GÜVENLİ BIST TABAN & YATAYDAN DİKEYE GEÇİŞ TARAMA HAVUZU
 DYNAMIC_WATCHLIST = {
     "TRMET", "BETAE", "TRALT", "BIGEN", "SDTTR", "PATEK", "ARDYZ", "ONCSM", 
     "NETCD", "MOBTL", "LOGO", "VBTYZ", "PAPIL", "ALVES", "AGROT", "BINHO", 
@@ -64,86 +65,6 @@ SEKTOR_KATALIZORLERI = {
     "MANAS": {"sektor": "Sayaç & Ölçüm Teknolojileri", "katalizor": "Doğalgaz ve su sayaçları kamu ve belediye ihaleleri."},
     "TEHOL": {"sektor": "Finans & Teknoloji Holding", "katalizor": "Girişim sermayesi iştirak satışı ve sermaye artırımı."},
     "LOGO": {"sektor": "Kurumsal ERP & Yazılım", "katalizor": "e-Dönüşüm ve SaaS abonelik gelirlerindeki güçlü büyüme."}
-}
-
-FON_SAKLAMA_VERISI = {
-    "LOGO": {
-        "fonlar": [
-            {"fon": "MAC (Marmara Capital Hisse)", "lot": "1.420.000 Lot", "agirlik": "%7.80", "maliyet": "115.00 TL"},
-            {"fon": "TTE (İş Portföy Teknoloji)", "lot": "2.850.000 Lot", "agirlik": "%6.40", "maliyet": "118.50 TL"},
-            {"fon": "TI2 (İş Portföy İkinci Hisse)", "lot": "980.000 Lot", "agirlik": "%4.90", "maliyet": "120.00 TL"}
-        ],
-        "toplam_lot": "5.250.000 Lot", "kilit_orani": "%21.4 (Güçlü Kurumsal)",
-        "virman": "Marmara Capital ve İş Portföy saklama havuzlarında çekirdek pozisyon."
-    },
-    "MPARK": {
-        "fonlar": [
-            {"fon": "KPC (Kuveyt Türk Katılım)", "lot": "3.120.000 Lot", "agirlik": "%9.40", "maliyet": "285.00 TL"},
-            {"fon": "MAC (Marmara Capital)", "lot": "1.850.000 Lot", "agirlik": "%6.20", "maliyet": "290.00 TL"},
-            {"fon": "TI2 (İş Portföy İkinci)", "lot": "2.450.000 Lot", "agirlik": "%7.80", "maliyet": "295.00 TL"}
-        ],
-        "toplam_lot": "7.420.000 Lot", "kilit_orani": "%28.5 (Yüksek Kurumsal)",
-        "virman": "Kuveyt Türk ve İş Bankası saklama hesaplarında düzenli kurumsal birikim."
-    },
-    "OZATD": {
-        "fonlar": [
-            {"fon": "TLY (Tera 1. Serbest)", "lot": "12.450.000 Lot", "agirlik": "%34.27", "maliyet": "26.50 TL"},
-            {"fon": "THF (Tera Hisse Yoğun)", "lot": "4.820.000 Lot", "agirlik": "%18.90", "maliyet": "28.00 TL"},
-            {"fon": "DHV (Deniz 1. Serbest)", "lot": "1.750.000 Lot", "agirlik": "%6.40", "maliyet": "31.20 TL"}
-        ],
-        "toplam_lot": "19.020.000 Lot", "kilit_orani": "%42.6 (Aşırı Yüksek)",
-        "virman": "Tera Yatırım ve Garanti Saklama hesaplarında kilitli."
-    },
-    "TRMET": {
-        "fonlar": [
-            {"fon": "LTL (Ahlatcı Hisse)", "lot": "1.950.000 Lot", "agirlik": "%8.20", "maliyet": "125.00 TL"},
-            {"fon": "DHV (Deniz 1. Serbest)", "lot": "850.000 Lot", "agirlik": "%4.10", "maliyet": "128.50 TL"}
-        ],
-        "toplam_lot": "2.800.000 Lot", "kilit_orani": "%16.5 (Taban Birikimi)",
-        "virman": "Ahlatcı ve Deniz saklamalarında ilk taban birikimi başladı."
-    },
-    "ODINE": {
-        "fonlar": [
-            {"fon": "PHE (Pusula Hisse)", "lot": "2.150.000 Lot", "agirlik": "%14.50", "maliyet": "44.00 TL"},
-            {"fon": "TTE (İş Portföy Teknoloji)", "lot": "1.890.000 Lot", "agirlik": "%14.57", "maliyet": "48.50 TL"}
-        ],
-        "toplam_lot": "4.040.000 Lot", "kilit_orani": "%24.8 (Yüksek)",
-        "virman": "Pusula ve İş Portföy saklama hesaplarında düzenli artış var."
-    },
-    "PASEU": {
-        "fonlar": [
-            {"fon": "PHE (Pusula Hisse)", "lot": "3.450.000 Lot", "agirlik": "%11.91", "maliyet": "17.50 TL"},
-            {"fon": "PUK (Pusula Katılım)", "lot": "1.650.000 Lot", "agirlik": "%7.80", "maliyet": "18.20 TL"}
-        ],
-        "toplam_lot": "5.100.000 Lot", "kilit_orani": "%21.2 (Yüksek)",
-        "virman": "Pusula fonları arasında virmanla kademeli blok toplama yapıldı."
-    },
-    "KARCL": {
-        "fonlar": [
-            {"fon": "THF (Tera Hisse)", "lot": "2.200.000 Lot", "agirlik": "%9.10", "maliyet": "14.50 TL"},
-            {"fon": "DUH (Hedef Ufuk Serbest)", "lot": "1.450.000 Lot", "agirlik": "%6.80", "maliyet": "15.00 TL"}
-        ],
-        "toplam_lot": "3.650.000 Lot", "kilit_orani": "%19.4 (Konsensüs Girişi)",
-        "virman": "Tera ve Hedef fonları ortak saklama oluşturuyor."
-    },
-    "KTLEV": {
-        "fonlar": [
-            {"fon": "PHE (Pusula Hisse)", "lot": "4.200.000 Lot", "agirlik": "%12.40", "maliyet": "34.00 TL"},
-            {"fon": "KPC (Kuveyt Türk Katılım)", "lot": "2.800.000 Lot", "agirlik": "%8.10", "maliyet": "36.50 TL"},
-            {"fon": "PUK (Pusula Katılım)", "lot": "1.900.000 Lot", "agirlik": "%5.90", "maliyet": "38.00 TL"}
-        ],
-        "toplam_lot": "8.900.000 Lot", "kilit_orani": "%26.7",
-        "virman": "Katılım ve serbest fon saklamalarında blok kilitli."
-    },
-    "ASELS": {
-        "fonlar": [
-            {"fon": "DHV (Deniz Hisse)", "lot": "4.850.000 Lot", "agirlik": "%11.20", "maliyet": "58.00 TL"},
-            {"fon": "KPC (Kuveyt Türk Katılım)", "lot": "3.200.000 Lot", "agirlik": "%7.50", "maliyet": "59.50 TL"},
-            {"fon": "PUK (Pusula Katılım)", "lot": "2.100.000 Lot", "agirlik": "%5.80", "maliyet": "60.00 TL"}
-        ],
-        "toplam_lot": "10.150.000 Lot", "kilit_orani": "%18.2 (Çekirdek Kurumsal)",
-        "virman": "Kurumsal fonların ana defansif taşıyıcı hissesi konumunda."
-    }
 }
 
 is_scanning = False
@@ -188,46 +109,6 @@ def get_kap_disclosures():
     except Exception as e:
         print("KAP Hatası:", e)
     return []
-
-def send_fund_holdings(ticker_input: str):
-    try:
-        t_clean = str(ticker_input).upper().replace("/FON", "").replace("FON", "").strip()
-        data = FON_SAKLAMA_VERISI.get(t_clean)
-        
-        if data:
-            lines = [
-                f"🏛 <b>{t_clean} ── KURUMSAL FON VE SAKLAMA DÖKÜMÜ</b> 🏛",
-                f"────────────────────────────",
-                f"📊 <b>FON BAZINDA TAŞINAN LOT & AĞIRLIK:</b>"
-            ]
-            for f in data["fonlar"]:
-                lines.append(f"• <b>{f['fon']}:</b> <code>{f['lot']}</code> ({f['agirlik']}) | Maliyet Ref: <code>{f['maliyet']}</code>")
-                
-            lines.extend([
-                f"────────────────────────────",
-                f"🔒 <b>Toplam Fon Kilitlenmesi:</b> <code>{data['toplam_lot']}</code>",
-                f"📈 <b>Fiili Dolaşım Kilit Oranı:</b> <code>{data['kilit_orani']}</code>",
-                f"────────────────────────────",
-                f"🕵️‍♂️ <b>VİRMAN & SAKLAMA ANALİZİ:</b>",
-                f"{data['virman']}",
-                f"────────────────────────────",
-                f"💡 <i>Not: Resmi Takasbank ve PDR denetiminden geçen net saklama verisidir.</i>"
-            ])
-            send_tg("\n".join(lines))
-        else:
-            try:
-                import yfinance as yf
-                df = yf.download(f"{t_clean}.IS", period="6mo", interval="1d", progress=False)
-                if not df.empty and len(df) >= 15:
-                    res = calculate_pre_pump_readiness(df, t_clean)
-                    card = format_rich_stock_card(t_clean, res)
-                    send_tg(f"ℹ️ <b>{t_clean}</b> PDR çekirdek listesinde henüz %5+ eşiği geçmedi. Güncel teknik ve akümülasyon analizi:\n\n" + card)
-                    return
-            except Exception:
-                pass
-            send_tg(f"🔍 <b>{t_clean}</b> için kayıtlı PDR fon verisi taranıyor veya fon payı %5'in altında.")
-    except Exception as e:
-        print("send_fund_holdings hatası:", e)
 
 def calculate_pre_pump_readiness(df: pd.DataFrame, ticker: str = "") -> dict:
     if df.empty or len(df) < 15:
@@ -386,6 +267,7 @@ def run_watchlist_scan_async():
 
     send_tg(f"📊 <b>BIST GÜVENLİ TABAN SIKIŞMASI RAPORU</b> 📊\n🛡 <i>Filtre: Konkordato Korumalı, 52H Dip (≤ 1.45x) & Dar Sıkışma</i>\n──────────────")
 
+    # En az 4 Güçlü Adayı Gönder
     for item in results[:4]:
         card_text = format_rich_stock_card(item["ticker"], item)
         send_tg(card_text)
@@ -443,7 +325,7 @@ def parse_disclosure_data(d):
 
 def bot_worker():
     print("🚀 BIST Smart Money Worker Başlatıldı.")
-    send_tg("🟢 <b>BIST SMART MONEY MOTORU AKTİF</b>\n\n• Hazırlık Skoru (% Puanı) korundu.\n• Sektör, Büyüme Hikayesi & Konkordato Koruması Devrede (En az 4 hisse).\n• <code>/tara</code> veya <code>/fon LOGO</code> yazabilirsiniz!")
+    send_tg("🟢 <b>BIST SMART MONEY BOTU AKTİF</b>\n\n• Sektörel Büyüme & Taban Sıkışması Taraması devrede.\n• 7/24 Canlı KAP dinleniyor.\n• <code>/tara</code> yazarak taramayı başlatabilirsiniz!")
     
     seen = set()
     last_update_id = None
@@ -458,17 +340,10 @@ def bot_worker():
                 text = msg.get("text", "").strip()
                 text_lower = text.lower()
                 
-                if text_lower.startswith("/fon") or text_lower.startswith("fon"):
-                    parts = text.split()
-                    if len(parts) >= 2:
-                        target_ticker = str(parts).strip().upper()
-                        threading.Thread(target=send_fund_holdings, args=(target_ticker,), daemon=True).start()
-                    else:
-                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: <code>/fon LOGO</code> veya <code>/fon MPARK</code>")
-                elif text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
+                if text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
                     threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
                 elif text_lower in ["/start", "start", "/yardim"]:
-                    send_tg("📌 <b>KOMUTLAR:</b>\n• <code>/tara</code> : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• <code>/fon HISSE</code> : Hissedeki fon lotlarını ve virman durumunu döker (Örn: <code>/fon LOGO</code>).\n• Canlı KAP alımları otomatik gelir.")
+                    send_tg("📌 <b>KOMUTLAR:</b>\n• <code>/tara</code> : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• 7/24 Canlı KAP alımları otomatik gelir.")
 
             now = time.time()
             if now - last_kap_check >= 60:
