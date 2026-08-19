@@ -160,41 +160,44 @@ def get_kap_disclosures():
     return []
 
 def send_fund_holdings(ticker_input: str):
-    t_clean = str(ticker_input).upper().replace("/FON", "").replace("FON", "").strip()
-    data = FON_SAKLAMA_VERISI.get(t_clean)
-    
-    if data:
-        lines = [
-            f"🏛 *{t_clean} ── KURUMSAL FON VE SAKLAMA DÖKÜMÜ* 🏛",
-            f"────────────────────────────",
-            f"📊 *FON BAZINDA TAŞINAN LOT & AĞIRLIK:*"
-        ]
-        for f in data["fonlar"]:
-            lines.append(f"• *{f['fon']}:* `{f['lot']}` ({f['agirlik']}) | Maliyet Ref: `{f['maliyet']}`")
-            
-        lines.extend([
-            f"────────────────────────────",
-            f"🔒 *Toplam Fon Kilitlenmesi:* `{data['toplam_lot']}`",
-            f"📈 *Fiili Dolaşım Kilit Oranı:* `{data['kilit_orani']}`",
-            f"────────────────────────────",
-            f"🕵️‍♂️ *VİRMAN & SAKLAMA ANALİZİ:*",
-            f"{data['virman']}",
-            f"────────────────────────────",
-            f"💡 *Not:* Resmi Takasbank ve PDR denetiminden geçen net saklama verisidir."
-        ])
-        send_tg("\n".join(lines))
-    else:
-        try:
-            import yfinance as yf
-            df = yf.download(f"{t_clean}.IS", period="6mo", interval="1d", progress=False)
-            if not df.empty and len(df) >= 15:
-                res = calculate_pre_pump_readiness(df)
-                card = format_rich_stock_card(t_clean, res)
-                send_tg(f"ℹ️ *{t_clean}* PDR çekirdek listesinde henüz %5+ eşiği geçmedi. Güncel teknik ve akümülasyon analizi:\n\n" + card)
-                return
-        except Exception:
-            pass
-        send_tg(f"🔍 *{t_clean}* için kayıtlı PDR fon verisi taranıyor veya fon payı %5'in altında.")
+    try:
+        t_clean = str(ticker_input).upper().replace("/FON", "").replace("FON", "").strip()
+        data = FON_SAKLAMA_VERISI.get(t_clean)
+        
+        if data:
+            lines = [
+                f"🏛 *{t_clean} ── KURUMSAL FON VE SAKLAMA DÖKÜMÜ* 🏛",
+                f"────────────────────────────",
+                f"📊 *FON BAZINDA TAŞINAN LOT & AĞIRLIK:*"
+            ]
+            for f in data["fonlar"]:
+                lines.append(f"• *{f['fon']}:* `{f['lot']}` ({f['agirlik']}) | Maliyet Ref: `{f['maliyet']}`")
+                
+            lines.extend([
+                f"────────────────────────────",
+                f"🔒 *Toplam Fon Kilitlenmesi:* `{data['toplam_lot']}`",
+                f"📈 *Fiili Dolaşım Kilit Oranı:* `{data['kilit_orani']}`",
+                f"────────────────────────────",
+                f"🕵️‍♂️ *VİRMAN & SAKLAMA ANALİZİ:*",
+                f"{data['virman']}",
+                f"────────────────────────────",
+                f"💡 *Not:* Resmi Takasbank ve PDR denetiminden geçen net saklama verisidir."
+            ])
+            send_tg("\n".join(lines))
+        else:
+            try:
+                import yfinance as yf
+                df = yf.download(f"{t_clean}.IS", period="6mo", interval="1d", progress=False)
+                if not df.empty and len(df) >= 15:
+                    res = calculate_pre_pump_readiness(df)
+                    card = format_rich_stock_card(t_clean, res)
+                    send_tg(f"ℹ️ *{t_clean}* PDR çekirdek listesinde henüz %5+ eşiği geçmedi. Güncel teknik ve akümülasyon analizi:\n\n" + card)
+                    return
+            except Exception:
+                pass
+            send_tg(f"🔍 *{t_clean}* için kayıtlı PDR fon verisi taranıyor veya fon payı %5'in altında.")
+    except Exception as e:
+        print("send_fund_holdings hatası:", e)
 
 def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     if df.empty or len(df) < 15:
