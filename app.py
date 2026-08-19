@@ -150,11 +150,18 @@ is_scanning = False
 
 def send_tg(msg):
     try:
-        requests.post(
+        r = requests.post(
             f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-            json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": True},
+            json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML", "disable_web_page_preview": True},
             timeout=10
         )
+        if r.status_code != 200:
+            clean_text = msg.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "")
+            requests.post(
+                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+                json={"chat_id": CHAT_ID, "text": clean_text, "disable_web_page_preview": True},
+                timeout=10
+            )
     except Exception as e:
         print("Telegram Gönderim Hatası:", e)
 
@@ -189,22 +196,22 @@ def send_fund_holdings(ticker_input: str):
         
         if data:
             lines = [
-                f"🏛 *{t_clean} ── KURUMSAL FON VE SAKLAMA DÖKÜMÜ* 🏛",
+                f"🏛 <b>{t_clean} ── KURUMSAL FON VE SAKLAMA DÖKÜMÜ</b> 🏛",
                 f"────────────────────────────",
-                f"📊 *FON BAZINDA TAŞINAN LOT & AĞIRLIK:*"
+                f"📊 <b>FON BAZINDA TAŞINAN LOT & AĞIRLIK:</b>"
             ]
             for f in data["fonlar"]:
-                lines.append(f"• *{f['fon']}:* `{f['lot']}` ({f['agirlik']}) | Maliyet Ref: `{f['maliyet']}`")
+                lines.append(f"• <b>{f['fon']}:</b> <code>{f['lot']}</code> ({f['agirlik']}) | Maliyet Ref: <code>{f['maliyet']}</code>")
                 
             lines.extend([
                 f"────────────────────────────",
-                f"🔒 *Toplam Fon Kilitlenmesi:* `{data['toplam_lot']}`",
-                f"📈 *Fiili Dolaşım Kilit Oranı:* `{data['kilit_orani']}`",
+                f"🔒 <b>Toplam Fon Kilitlenmesi:</b> <code>{data['toplam_lot']}</code>",
+                f"📈 <b>Fiili Dolaşım Kilit Oranı:</b> <code>{data['kilit_orani']}</code>",
                 f"────────────────────────────",
-                f"🕵️‍♂️ *VİRMAN & SAKLAMA ANALİZİ:*",
+                f"🕵️‍♂️ <b>VİRMAN & SAKLAMA ANALİZİ:</b>",
                 f"{data['virman']}",
                 f"────────────────────────────",
-                f"💡 *Not:* Resmi Takasbank ve PDR denetiminden geçen net saklama verisidir."
+                f"💡 <i>Not: Resmi Takasbank ve PDR denetiminden geçen net saklama verisidir.</i>"
             ])
             send_tg("\n".join(lines))
         else:
@@ -214,11 +221,11 @@ def send_fund_holdings(ticker_input: str):
                 if not df.empty and len(df) >= 15:
                     res = calculate_pre_pump_readiness(df, t_clean)
                     card = format_rich_stock_card(t_clean, res)
-                    send_tg(f"ℹ️ *{t_clean}* PDR çekirdek listesinde henüz %5+ eşiği geçmedi. Güncel teknik ve akümülasyon analizi:\n\n" + card)
+                    send_tg(f"ℹ️ <b>{t_clean}</b> PDR çekirdek listesinde henüz %5+ eşiği geçmedi. Güncel teknik ve akümülasyon analizi:\n\n" + card)
                     return
             except Exception:
                 pass
-            send_tg(f"🔍 *{t_clean}* için kayıtlı PDR fon verisi taranıyor veya fon payı %5'in altında.")
+            send_tg(f"🔍 <b>{t_clean}</b> için kayıtlı PDR fon verisi taranıyor veya fon payı %5'in altında.")
     except Exception as e:
         print("send_fund_holdings hatası:", e)
 
@@ -312,31 +319,31 @@ def format_rich_stock_card(ticker: str, data: dict) -> str:
     badge = "🔥" if score >= 80 else "⏳"
     
     lines = [
-        f"{badge} *{ticker}* ── *HAZIRLIK SKORU: %{score}*",
+        f"{badge} <b>{ticker}</b> ── <b>HAZIRLIK SKORU: %{score}</b>",
         f"────────────────────────────",
-        f"🎯 *Evre Durumu:* *{data.get('phase')}*",
-        f"🏭 *Sektör & Tema:* `{data.get('sektor')}`",
-        f"📰 *KAP & Büyüme Hikayesi:* {data.get('katalizor')}",
+        f"🎯 <b>Evre Durumu:</b> <b>{data.get('phase')}</b>",
+        f"🏭 <b>Sektör & Tema:</b> <code>{data.get('sektor')}</code>",
+        f"📰 <b>KAP & Büyüme Hikayesi:</b> {data.get('katalizor')}",
         f"────────────────────────────",
-        f"📊 *AKÜMÜLASYON & PARA AKIŞI:*",
-        f"• Para Girişi (CMF): `{data.get('cmf_str')}`",
-        f"• RSI (14G): `{data.get('rsi', 50):.1f} (Aşırı Alımdan Uzak / Taban)`",
-        f"• 52H Dip Durumu: `{data.get('low_52w', 0):.2f} TL ({data.get('prim_52w', 1.0):.2f}x - Dipte)`",
+        f"📊 <b>AKÜMÜLASYON & PARA AKIŞI:</b>",
+        f"• Para Girişi (CMF): <code>{data.get('cmf_str')}</code>",
+        f"• RSI (14G): <code>{data.get('rsi', 50):.1f} (Aşırı Alımdan Uzak / Taban)</code>",
+        f"• 52H Dip Durumu: <code>{data.get('low_52w', 0):.2f} TL ({data.get('prim_52w', 1.0):.2f}x - Dipte)</code>",
         f"────────────────────────────",
-        f"🎯 *WYCKOFF SIKIŞMA VE TEKNİK YAPI:*",
-        f"• Güncel Fiyat: `{data.get('price', 0):.2f} TL`",
-        f"• 20G Sıkışma Bandı: `{data.get('low_20d', 0):.2f} - {data.get('high_20d', 0):.2f} TL (%{data.get('range_pct', 0):.1f})`",
-        f"• Hareketli Ortalamalar: `20 EMA: {data.get('ema_20', 0):.2f} TL | 50 EMA: {data.get('ema_50', 0):.2f} TL`",
+        f"🎯 <b>WYCKOFF SIKIŞMA VE TEKNİK YAPI:</b>",
+        f"• Güncel Fiyat: <code>{data.get('price', 0):.2f} TL</code>",
+        f"• 20G Sıkışma Bandı: <code>{data.get('low_20d', 0):.2f} - {data.get('high_20d', 0):.2f} TL (%{data.get('range_pct', 0):.1f})</code>",
+        f"• Hareketli Ortalamalar: <code>20 EMA: {data.get('ema_20', 0):.2f} TL | 50 EMA: {data.get('ema_50', 0):.2f} TL</code>",
         f"────────────────────────────",
-        f"💡 *ASİMETRİK OPERASYONEL TRADE PLANI:*",
-        f"• 🎯 Önerilen Giriş Aralığı: `{data.get('entry_range')}`",
-        f"• 🛑 Stop-Loss (%7): `{data.get('stop_loss', 0):.2f} TL` *(Kapanış şartı)*",
-        f"• 🥇 Hedef 1 (+%25): `{data.get('target_1', 0):.2f} TL`",
-        f"• 🚀 Hedef 2 (+%50): `{data.get('target_2', 0):.2f} TL`",
-        f"• 💎 Hedef 3 (+%100): `{data.get('target_3', 0):.2f} TL`",
-        f"• Risk / Ödül Oranı: `1 : 7.1`",
+        f"💡 <b>ASİMETRİK OPERASYONEL TRADE PLANI:</b>",
+        f"• 🎯 Önerilen Giriş Aralığı: <code>{data.get('entry_range')}</code>",
+        f"• 🛑 Stop-Loss (%7): <code>{data.get('stop_loss', 0):.2f} TL</code> (Kapanış şartı)",
+        f"• 🥇 Hedef 1 (+%25): <code>{data.get('target_1', 0):.2f} TL</code>",
+        f"• 🚀 Hedef 2 (+%50): <code>{data.get('target_2', 0):.2f} TL</code>",
+        f"• 💎 Hedef 3 (+%100): <code>{data.get('target_3', 0):.2f} TL</code>",
+        f"• Risk / Ödül Oranı: <b>1 : 7.1</b>",
         f"────────────────────────────",
-        f"🔗 [TradingView Grafiği](https://tr.tradingview.com/symbols/BIST-{ticker}/) | [KAP Şirket Bilgisi](https://www.kap.org.tr/tr/sirket-bilgileri/genel/{ticker})"
+        f"🔗 <a href=\"https://tr.tradingview.com/symbols/BIST-{ticker}/\">TradingView Grafiği</a> | <a href=\"https://www.kap.org.tr/tr/sirket-bilgileri/genel/{ticker}\">KAP Şirket Bilgisi</a>"
     ]
     return "\n".join(lines)
 
@@ -348,7 +355,7 @@ def run_watchlist_scan_async():
 
     is_scanning = True
     active_pool = [t for t in DYNAMIC_WATCHLIST if t not in KARA_LISTE]
-    send_tg(f"⏳ *BIST SEKTÖREL TABAN SIKIŞMASI TARANIYOR...*\n🛡 Kara Liste & Konkordato Koruması Devrede\n📊 Taranan Güvenli Hisse: `{len(active_pool)}`\nLütfen 5-8 saniye bekleyin.")
+    send_tg(f"⏳ <b>BIST SEKTÖREL TABAN SIKIŞMASI TARANIYOR...</b>\n🛡 Kara Liste & Konkordato Koruması Devrede\n📊 Taranan Güvenli Hisse: <code>{len(active_pool)}</code>\nLütfen 5-8 saniye bekleyin.")
     results = []
     
     try:
@@ -371,15 +378,14 @@ def run_watchlist_scan_async():
         print("Tarama Hatası:", e)
 
     if not results:
-        send_tg("ℹ️ *TARAMA TAMAMLANDI*\nTaranan hisseler arasında şu an güvenli taban sıkışmasında olan hisse bulunamadı.")
+        send_tg("ℹ️ <b>TARAMA TAMAMLANDI</b>\nTaranan hisseler arasında şu an güvenli taban sıkışmasında olan hisse bulunamadı.")
         is_scanning = False
         return
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
-    send_tg(f"📊 *BIST GÜVENLİ TABAN SIKIŞMASI RAPORU* 📊\n🛡 *Filtre:* Konkordato Korumalı, 52H Dip (≤ 1.45x) & Dar Sıkışma\n──────────────")
+    send_tg(f"📊 <b>BIST GÜVENLİ TABAN SIKIŞMASI RAPORU</b> 📊\n🛡 <i>Filtre: Konkordato Korumalı, 52H Dip (≤ 1.45x) & Dar Sıkışma</i>\n──────────────")
 
-    # En az 4 Güçlü Adayı Gönder
     for item in results[:4]:
         card_text = format_rich_stock_card(item["ticker"], item)
         send_tg(card_text)
@@ -437,7 +443,7 @@ def parse_disclosure_data(d):
 
 def bot_worker():
     print("🚀 BIST Smart Money Worker Başlatıldı.")
-    send_tg("🟢 *BIST SMART MONEY MOTORU AKTİF*\n\n• Hazırlık Skoru (% Puanı) korundu.\n• Sektör, Büyüme Hikayesi & Konkordato Koruması Devrede (En az 4 hisse).\n• `/tara` veya `/fon LOGO` yazabilirsiniz!")
+    send_tg("🟢 <b>BIST SMART MONEY MOTORU AKTİF</b>\n\n• Hazırlık Skoru (% Puanı) korundu.\n• Sektör, Büyüme Hikayesi & Konkordato Koruması Devrede (En az 4 hisse).\n• <code>/tara</code> veya <code>/fon LOGO</code> yazabilirsiniz!")
     
     seen = set()
     last_update_id = None
@@ -455,14 +461,14 @@ def bot_worker():
                 if text_lower.startswith("/fon") or text_lower.startswith("fon"):
                     parts = text.split()
                     if len(parts) >= 2:
-                        target_ticker = str(parts).strip()
+                        target_ticker = str(parts).strip().upper()
                         threading.Thread(target=send_fund_holdings, args=(target_ticker,), daemon=True).start()
                     else:
-                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: `/fon LOGO` veya `/fon MPARK`")
+                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: <code>/fon LOGO</code> veya <code>/fon MPARK</code>")
                 elif text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
                     threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
                 elif text_lower in ["/start", "start", "/yardim"]:
-                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• `/fon HISSE` : Hissedeki fon lotlarını ve virman durumunu döker (Örn: `/fon LOGO`).\n• Canlı KAP alımları otomatik gelir.")
+                    send_tg("📌 <b>KOMUTLAR:</b>\n• <code>/tara</code> : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• <code>/fon HISSE</code> : Hissedeki fon lotlarını ve virman durumunu döker (Örn: <code>/fon LOGO</code>).\n• Canlı KAP alımları otomatik gelir.")
 
             now = time.time()
             if now - last_kap_check >= 60:
@@ -480,16 +486,16 @@ def bot_worker():
                     ratio_txt = f"%{sig['ratio']}" if sig['ratio'] else "Sınır Bildirimi"
 
                     msg = (
-                        f"🚨 *CANLI KURUMSAL PAY ALIM ALARMI* 🚨\n"
+                        f"🚨 <b>CANLI KURUMSAL PAY ALIM ALARMI</b> 🚨\n"
                         f"────────────────────\n"
-                        f"📌 *Hisse:* `{sig['ticker']}`\n"
-                        f"🏛 *Kurum:* {sig['inst']}\n"
-                        f"📊 *Yeni Sermaye Payı:* `{ratio_txt}`\n"
-                        f"📦 *İşlem Lotu:* `{lot_txt}`\n"
-                        f"💰 *İşlem Fiyatı:* `{sig['price_info']}`\n"
-                        f"🕒 *Tarih:* {sig['date']}\n"
+                        f"📌 <b>Hisse:</b> <code>{sig['ticker']}</code>\n"
+                        f"🏛 <b>Kurum:</b> {sig['inst']}\n"
+                        f"📊 <b>Yeni Sermaye Payı:</b> <code>{ratio_txt}</code>\n"
+                        f"📦 <b>İşlem Lotu:</b> <code>{lot_txt}</code>\n"
+                        f"💰 <b>İşlem Fiyatı:</b> <code>{sig['price_info']}</code>\n"
+                        f"🕒 <b>Tarih:</b> {sig['date']}\n"
                         f"────────────────────\n"
-                        f"🔗 [KAP Bildirimi](https://www.kap.org.tr/tr/Bildirim/{sig['id']})"
+                        f"🔗 <a href=\"https://www.kap.org.tr/tr/Bildirim/{sig['id']}\">KAP Bildirimi</a>"
                     )
                     send_tg(msg)
                     print(f"KAP Gönderildi: {sig['ticker']}")
