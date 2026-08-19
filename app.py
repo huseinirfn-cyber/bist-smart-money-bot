@@ -33,7 +33,16 @@ HEDEF_KURUMLAR = [
     "ALBATROS", "KUVEYT TÜRK", "AHLATCI", "AZİMUT", "İSTANBUL PORTFÖY", "TACİRLER"
 ]
 HEDEF_FONLAR = ["TLY", "THF", "DUH", "PHE", "DHV", "DOH", "PCS", "PUK", "KPC", "LTL", "MAC", "TI2", "IIH"]
-IZLEME_HAVUZU = ["OZATD", "ODINE", "PASEU", "KARCL", "KTLEV", "GUNDG", "TEHOL", "BETAE", "TRALT", "TRMET", "BIGEN", "ALKLC"]
+
+# GENİŞ BIST TABAN & YATAYDAN DİKEYE GEÇİŞ TARAMA HAVUZU (45+ Hisse)
+IZLEME_HAVUZU = [
+    "TRMET", "BETAE", "TRALT", "BIGEN", "SDTTR", "PATEK", "ARDYZ", "ONCSM", 
+    "NETCD", "MOBTL", "LOGO", "VBTYZ", "PAPIL", "ALVES", "AGROT", "BINHO", 
+    "HOROZ", "LIDER", "MANAS", "ORZAX", "ANELE", "BARMA", "CVKMD", "KARYE", 
+    "TEZOL", "KOPOL", "CWENE", "ALFAS", "EUPWR", "GESAN", "ASTOR", "SAYAS", 
+    "TRHOL", "DAPGM", "TEHOL", "PEKGY", "SELEC", "MPARK", "TABGD", "GOKNR", 
+    "KRVGD", "MEYSU", "EBEBK", "PASEU", "KTLEV", "GUNDG", "KARCL", "ALKLC", "OZATD"
+]
 
 def send_tg(msg):
     try:
@@ -70,136 +79,118 @@ def get_kap_disclosures():
     return []
 
 def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
-    if df.empty or len(df) < 15:
+    """
+    YATAYDAN DİKEYE GEÇİŞ (WYCKOFF TABAN SIKIŞMASI) KATI FİLTRESİ
+    1 yılda 2x, 4x, 18x yapmış hisseleri DOĞRUDAN ELER.
+    Sadece tabanda sıkışmış ve henüz kalkmamış hisselere onay verir.
+    """
+    if df.empty or len(df) < 20:
         return {"score": 0, "phase": "YETERSIZ_VERI", "reasons": []}
 
-    high_20d = float(df['High'].tail(min(len(df), 20)).max())
-    low_20d = float(df['Low'].tail(min(len(df), 20)).min())
     current_price = float(df['Close'].iloc[-1])
-    range_pct = ((high_20d - low_20d) / low_20d) * 100 if low_20d > 0 else 0
-
-    sma_20 = df['Close'].rolling(min(len(df), 20)).mean()
-    std_20 = df['Close'].rolling(min(len(df), 20)).std().fillna(0)
-    bb_width = ((sma_20 + std_20*2) - (sma_20 - std_20*2)) / sma_20 * 100
-    is_squeezing = float(bb_width.iloc[-1]) <= float(bb_width.tail(min(len(df), 60)).min()) * 1.35 if len(df) >= 20 else False
-
-    mf_multiplier = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
-    mf_multiplier = mf_multiplier.fillna(0)
-    vol_sum = df['Volume'].rolling(min(len(df), 20)).sum()
-    cmf_20 = (mf_multiplier * df['Volume']).rolling(min(len(df), 20)).sum() / vol_sum
-    current_cmf = float(cmf_20.iloc[-1]) if not cmf_20.empty and not np.isnan(cmf_20.iloc[-1]) else 0
-
-    ema_20 = float(df['Close'].ewm(span=min(len(df), 20), adjust=False).mean().iloc[-1])
     low_52w = float(df['Low'].min())
     prim_52w = current_price / low_52w if low_52w > 0 else 1.0
 
-    score = 0
+    # ⛔ KATI KURAL 1: 52H Dibe göre 1.45x'ten fazla primliyse (4x, 18x yapmışsa) DİREKT ELE!
+    if prim_52w > 1.45:
+        return {"score": 0, "phase": "AŞIRI PRİMLİ / TEPE RİSKİ", "reasons": []}
+
+    # 20 Günlük Fiyat Sıkışması
+    high_20d = float(df['High'].tail(20).max())
+    low_20d = float(df['Low'].tail(20).min())
+    range_pct = ((high_20d - low_20d) / low_20d) * 100 if low_20d > 0 else 0
+
+    # ⛔ KATI KURAL 2: Son 20 günlük yatay bant %16'dan genişse ELE
+    if range_pct > 16.0:
+        return {"score": 0, "phase": "VOLATİLİTE YÜKSEK", "reasons": []}
+
+    # Para Girişi (CMF)
+    mf_multiplier = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
+    mf_multiplier = mf_multiplier.fillna(0)
+    vol_sum = df['Volume'].rolling(20).sum()
+    cmf_20 = (mf_multiplier * df['Volume']).rolling(20).sum() / vol_sum
+    current_cmf = float(cmf_20.iloc[-1]) if not cmf_20.empty and not np.isnan(cmf_20.iloc[-1]) else 0
+
+    # Ortalama Desteği
+    ema_20 = float(df['Close'].ewm(span=20, adjust=False).mean().iloc[-1])
+    above_ema20 = current_price >= ema_20
+
+    score = 60
     reasons = []
 
-    if prim_52w <= 1.60:
-        score += 25
-        reasons.append(f"Tabanda (52H: {prim_52w:.2f}x)")
-    elif prim_52w <= 2.2:
-        score += 15
-        reasons.append(f"Makul prim ({prim_52w:.2f}x)")
-
-    if range_pct <= 14.0:
-        score += 25
-        reasons.append(f"Kuvvetli sıkışma (20G: %{range_pct:.1f})")
-    elif range_pct <= 22.0:
-        score += 15
-        reasons.append(f"Konsolidasyon (20G: %{range_pct:.1f})")
-
-    if current_cmf > 0.05:
-        score += 25
-        reasons.append(f"Güçlü para girişi (CMF: +{current_cmf:.2f})")
-    elif current_cmf >= -0.05:
-        score += 15
-        reasons.append(f"Pozitif para akışı (CMF: {current_cmf:+.2f})")
-
-    if current_price >= ema_20:
-        score += 25
-        reasons.append("20 EMA üzerinde tutunuyor")
+    if prim_52w <= 1.25:
+        score += 20
+        reasons.append(f"Tam dipte (52H Dip: {prim_52w:.2f}x)")
     else:
         score += 10
-        reasons.append("Destek arayışında")
+        reasons.append(f"Taban seviyesinde ({prim_52w:.2f}x)")
 
-    if score >= 70:
-        phase = "🔥 PATLAMA / HAREKET EŞİĞİNDE"
-        action = "GİRİŞ / İLK KADEME ALIM"
-    elif score >= 45:
-        phase = "⏳ AKÜMÜLASYON DEVAM EDİYOR"
-        action = "TAKİPTE KAL / DÜŞÜŞTE TOPLA"
+    if range_pct <= 9.0:
+        score += 20
+        reasons.append(f"Dar bantta akümülasyon (20G: %{range_pct:.1f})")
     else:
-        phase = "⚪ HENÜZ OLGUNLAŞMADI"
-        action = "İZLEMEDE BEKLET"
+        score += 10
+        reasons.append(f"Yatay konsolidasyon (20G: %{range_pct:.1f})")
+
+    if current_cmf > 0.05:
+        score += 10
+        reasons.append(f"Kurumsal para girişi (CMF: +{current_cmf:.2f})")
+
+    if above_ema20:
+        reasons.append("20 EMA üzerinde kalkış hazırlığı")
+
+    phase = "🔥 YATAYDAN DİKEYE GEÇİŞ (TABAN KIRILIMI)" if score >= 80 else "⏳ TABANDA SESSİZ MAL TOPLAMA"
+    action = "GİRİŞ / İLK KADEME ALIM" if score >= 80 else "DESTEKTEN TOPLA"
 
     return {
         "score": score,
         "phase": phase,
         "action": action,
         "price": current_price,
+        "prim_52w": prim_52w,
+        "range_pct": range_pct,
         "stop_loss": round(current_price * 0.93, 2),
         "target_1": round(current_price * 1.50, 2),
         "reasons": reasons
     }
 
 def run_watchlist_scan():
-    send_tg("⏳ *CANLI BIST & 15-30 GÜNLÜK AKÜMÜLASYON TARAMASI BAŞLADI...*\nLütfen 3-5 saniye bekleyin.")
+    send_tg("⏳ *BIST GENELİ TABAN SIKIŞMASI & YATAYDAN DİKEYE GEÇİŞ TARAMASI BAŞLADI...*\nLütfen 5-8 saniye bekleyin.")
     results = []
     
-    # 1. Hızlı Paralel Toplu İndirme (Tüm hisseler aynı anda 1.5 saniyede iner)
     try:
         import yfinance as yf
         symbols = [f"{t}.IS" for t in IZLEME_HAVUZU]
-        batch_data = yf.download(symbols, period="6mo", interval="1d", group_by='ticker', threads=True, progress=False, timeout=8)
+        batch_data = yf.download(symbols, period="6mo", interval="1d", group_by='ticker', threads=True, progress=False, timeout=12)
         
         for ticker in IZLEME_HAVUZU:
             sym = f"{ticker}.IS"
             try:
                 if sym in batch_data:
                     df_t = batch_data[sym].dropna()
-                    if not df_t.empty and len(df_t) >= 15:
+                    if not df_t.empty and len(df_t) >= 20:
                         res = calculate_pre_pump_readiness(df_t)
-                        if res.get("score", 0) > 0:
+                        if res.get("score", 0) >= 60:
                             results.append({"ticker": ticker, **res})
             except Exception:
                 pass
     except Exception as e:
-        print("Toplu indirme hatası:", e)
-
-    # 2. Yedek İş Yatırım Hattı
-    if len(results) < 3:
-        for ticker in IZLEME_HAVUZU:
-            if any(r["ticker"] == ticker for r in results): continue
-            try:
-                url = f"https://www.isyatirim.com.tr/_layouts/15/IsYatirim.Website/Common/ChartData.aspx/Index2?period=1440&code={ticker}.E.BIST"
-                headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.isyatirim.com.tr/"}
-                r = requests.get(url, headers=headers, timeout=3)
-                if r.status_code == 200 and r.text:
-                    data = r.json()
-                    if isinstance(data, list) and len(data) >= 15:
-                        df = pd.DataFrame(data, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-                        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                            df[col] = pd.to_numeric(df[col], errors='coerce')
-                        res = calculate_pre_pump_readiness(df.dropna())
-                        if res.get("score", 0) > 0:
-                            results.append({"ticker": ticker, **res})
-            except Exception:
-                pass
+        print("Tarama Hatası:", e)
 
     if not results:
-        send_tg("⚠️ Veri hattı anlık meşgul, lütfen 30 saniye sonra tekrar /tara yazın.")
+        send_tg("ℹ️ *TARAMA TAMAMLANDI*\n\nTaranan 45+ hisse içinde şu an taban sıkışmasında olan uygun hisse bulunamadı (Tüm hisseler ya primli ya da volatil).")
         return
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
     msg_lines = [
-        "📊 *CANLI BIST HAREKET HAZIRLIK RAPORU* 📊",
+        "📊 *BIST YATAYDAN DİKEYE GEÇİŞ (TABAN AKÜMÜLASYON) RAPORU* 📊",
+        "────────────────────",
+        "🛡 *Filtre Kriteri:* 52H Dibe Yakın (≤ 1.45x) & Dar Bantta Sıkışma",
         "────────────────────"
     ]
     for item in results[:5]:
-        badge = "🔥" if item["score"] >= 70 else ("⏳" if item["score"] >= 45 else "⚪")
+        badge = "🔥" if item["score"] >= 80 else "⏳"
         msg_lines.extend([
             f"{badge} *{item['ticker']}* — Hazırlık Skoru: `%{item['score']}`",
             f"• Durum: {item['phase']}",
@@ -258,8 +249,8 @@ def parse_disclosure_data(d):
     }
 
 def bot_worker():
-    print("🚀 Render BIST Smart Money Bot Başlatıldı.")
-    send_tg("🟢 *BIST SMART MONEY BOTU AKTİF (RENDER HIZLI MOD)*\n\n• Paralel çoklu veri hattı devrede.\n• Telegram'dan `/tara` yazarak anında tarama yapabilirsin!")
+    print("🚀 Render BIST Yataydan Dikeye Taban Botu Başlatıldı.")
+    send_tg("🟢 *BIST YATAYDAN DİKEYE TABAN BOTU AKTİF (RENDER)*\n\n• 45+ BIST hissesi üzerinde katı taban/sıkışma filtresi devrede.\n• 1.45x üzeri primli tüm hisseler elendi.\n• Telegram'dan `/tara` yazarak taramayı başlatabilirsin!")
     
     seen = set()
     last_update_id = None
@@ -276,7 +267,7 @@ def bot_worker():
                 if text in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
                     run_watchlist_scan()
                 elif text in ["/start", "start", "/yardim"]:
-                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Canlı BIST ve KAP akışında akümülasyonu biten hisseleri listeler.\n• 7/24 Canlı KAP bildirimleri anında telefonuna düşer.")
+                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : 52 haftalık tabanında sıkışmış ve patlamaya hazır hisseleri listeler.\n• 7/24 Canlı KAP bildirimleri anında telefonuna düşer.")
 
             now = time.time()
             if now - last_kap_check >= 60:
