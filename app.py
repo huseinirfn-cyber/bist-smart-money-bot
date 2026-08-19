@@ -34,13 +34,36 @@ HEDEF_KURUMLAR = [
 ]
 HEDEF_FONLAR = ["TLY", "THF", "DUH", "PHE", "DHV", "DOH", "PCS", "PUK", "KPC", "LTL", "MAC", "TI2", "IIH"]
 
+# ⛔ TOKSİK VE RİSKLİ ŞİRKETLER KARA LİSTESİ (Konkordato, Gözaltı/YİP vb. Doğrudan Yasaklı)
+KARA_LISTE = {"BARMA", "MEGAP", "YESIL", "AVOD", "DERAS", "KENT", "KUVVA", "ISBIR", "ROYAL"}
+
 DYNAMIC_WATCHLIST = {
     "TRMET", "BETAE", "TRALT", "BIGEN", "SDTTR", "PATEK", "ARDYZ", "ONCSM", 
     "NETCD", "MOBTL", "LOGO", "VBTYZ", "PAPIL", "ALVES", "AGROT", "BINHO", 
-    "HOROZ", "LIDER", "MANAS", "ORZAX", "ANELE", "BARMA", "CVKMD", "KARYE", 
-    "TEZOL", "KOPOL", "CWENE", "ALFAS", "EUPWR", "GESAN", "ASTOR", "SAYAS", 
-    "TRHOL", "DAPGM", "TEHOL", "PEKGY", "SELEC", "MPARK", "TABGD", "GOKNR", 
-    "KRVGD", "MEYSU", "EBEBK", "PASEU", "KTLEV", "GUNDG", "KARCL"
+    "HOROZ", "LIDER", "MANAS", "ORZAX", "ANELE", "CVKMD", "KARYE", "TEZOL", 
+    "KOPOL", "CWENE", "ALFAS", "EUPWR", "GESAN", "ASTOR", "SAYAS", "TRHOL", 
+    "DAPGM", "TEHOL", "PEKGY", "SELEC", "MPARK", "TABGD", "GOKNR", "KRVGD", 
+    "MEYSU", "EBEBK", "PASEU", "KTLEV", "GUNDG", "KARCL"
+}
+
+SEKTOR_KATALIZORLERI = {
+    "TRMET": {"sektor": "Metal & Emtia / Sanayi", "katalizor": "İhracat talebi, yeni fabrika kapasite artışı ve emtia desteği."},
+    "BETAE": {"sektor": "Enerji & Elektrik Ekipman", "katalizor": "Yenilenebilir enerji trafo ihaleleri ve yeni iş sözleşmeleri."},
+    "TRALT": {"sektor": "Maden & Kıymetli Metal", "katalizor": "Altın/maden arama ruhsatları ve emtia rallisi desteği."},
+    "SDTTR": {"sektor": "Savunma Sanayii & Aviyonik", "katalizor": "Savunma Sanayii Başkanlığı radar ve haberleşme sözleşmeleri."},
+    "PAPIL": {"sektor": "Güvenlik & Biyometrik Teknoloji", "katalizor": "Uluslararası sınır güvenlik yazılımı ihracat anlaşmaları."},
+    "ARDYZ": {"sektor": "Yazılım & Bulut Bilişim", "katalizor": "Kamuda dijital dönüşüm ve kurumsal bulut altyapı projeleri."},
+    "ONCSM": {"sektor": "Sağlık & Medikal Robotik", "katalizor": "Kemoterapi hazırlama robotları yurt dışı distribütörlükleri."},
+    "ORZAX": {"sektor": "İlaç & Takviye Gıda", "katalizor": "Orta Asya/Özbekistan yeni iştirak ve ihracat genişlemesi."},
+    "ALVES": {"sektor": "Kablo & Enerji Altyapı", "katalizor": "Avrupa ve Ortadoğu enerji nakil kablo tedarik sözleşmeleri."},
+    "CVKMD": {"sektor": "Madencilik & Metal", "katalizor": "Krom ve altın işletme tesisleri kapasite genişletmesi."},
+    "KOPOL": {"sektor": "Petrokimya & Polimer", "katalizor": "Geri dönüşüm polimer tesisi teşvikleri ve devreye alma."},
+    "SELEC": {"sektor": "Sağlık & Ecza Dağıtım", "katalizor": "İlaç fiyat güncellemesi ve pazar payı genişlemesi."},
+    "BIGEN": {"sektor": "Biyoteknoloji & Tarım", "katalizor": "Tohum ve tarımsal Ar-Ge ürünlerinin ticarileşmesi."},
+    "PATEK": {"sektor": "Bilişim & Lojistik Yazılım", "katalizor": "Akıllı liman ve demiryolu lojistik yazılım entegrasyonları."},
+    "MANAS": {"sektor": "Sayaç & Ölçüm Teknolojileri", "katalizor": "Doğalgaz ve su sayaçları kamu ve belediye ihaleleri."},
+    "TEHOL": {"sektor": "Finans & Teknoloji Holding", "katalizor": "Girişim sermayesi iştirak satışı ve sermaye artırımı."},
+    "LOGO": {"sektor": "Kurumsal ERP & Yazılım", "katalizor": "e-Dönüşüm ve SaaS abonelik gelirlerindeki güçlü büyüme."}
 }
 
 FON_SAKLAMA_VERISI = {
@@ -189,7 +212,7 @@ def send_fund_holdings(ticker_input: str):
                 import yfinance as yf
                 df = yf.download(f"{t_clean}.IS", period="6mo", interval="1d", progress=False)
                 if not df.empty and len(df) >= 15:
-                    res = calculate_pre_pump_readiness(df)
+                    res = calculate_pre_pump_readiness(df, t_clean)
                     card = format_rich_stock_card(t_clean, res)
                     send_tg(f"ℹ️ *{t_clean}* PDR çekirdek listesinde henüz %5+ eşiği geçmedi. Güncel teknik ve akümülasyon analizi:\n\n" + card)
                     return
@@ -199,18 +222,27 @@ def send_fund_holdings(ticker_input: str):
     except Exception as e:
         print("send_fund_holdings hatası:", e)
 
-def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
+def calculate_pre_pump_readiness(df: pd.DataFrame, ticker: str = "") -> dict:
     if df.empty or len(df) < 15:
-        return {"score": 0, "phase": "YETERSIZ_VERI"}
+        return {"allow": False, "phase": "YETERSIZ_VERI"}
+
+    if ticker in KARA_LISTE:
+        return {"allow": False, "phase": "KARA LİSTE / KONKORDATO RİSKİ"}
 
     current_price = float(df['Close'].iloc[-1])
     low_52w = float(df['Low'].min())
     high_52w = float(df['High'].max())
     prim_52w = current_price / low_52w if low_52w > 0 else 1.0
 
+    if prim_52w > 1.45:
+        return {"allow": False, "phase": "AŞIRI PRİMLİ / TEPE RİSKİ"}
+
     high_20d = float(df['High'].tail(min(len(df), 20)).max())
     low_20d = float(df['Low'].tail(min(len(df), 20)).min())
     range_pct = ((high_20d - low_20d) / low_20d) * 100 if low_20d > 0 else 0
+
+    if range_pct > 16.0:
+        return {"allow": False, "phase": "VOLATİLİTE YÜKSEK"}
 
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
@@ -229,35 +261,19 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     ema_50 = float(df['Close'].ewm(span=min(len(df), 50), adjust=False).mean().iloc[-1])
 
     score = 60
-    reasons = []
+    if prim_52w <= 1.25: score += 20
+    if range_pct <= 9.0: score += 20
+    if current_cmf > 0.05: score += 10
 
-    if prim_52w <= 1.25:
-        score += 20
-        reasons.append(f"Tam dipte (52H: {prim_52w:.2f}x)")
-    elif prim_52w <= 1.45:
-        score += 10
-        reasons.append(f"Taban seviyesinde ({prim_52w:.2f}x)")
-    else:
-        reasons.append(f"Primli seviye ({prim_52w:.2f}x)")
+    cmf_status = f"+{current_cmf:.2f} (Güçlü Para Girişi)" if current_cmf > 0.05 else (f"{current_cmf:+.2f} (Dengeli Para Akışı)" if current_cmf >= -0.05 else f"{current_cmf:.2f} (Nötr)")
 
-    if range_pct <= 9.0:
-        score += 20
-        reasons.append(f"Kuvvetli dar bant sıkışması (%{range_pct:.1f})")
-    elif range_pct <= 16.0:
-        score += 10
-        reasons.append(f"Konsolidasyon (%{range_pct:.1f})")
+    kat_info = SEKTOR_KATALIZORLERI.get(ticker, {
+        "sektor": "Büyüme & Sanayi / Teknoloji",
+        "katalizor": "KAP yeni iş ilişkileri, ihracat ve operasyonel kârlılık büyümesi takibinde."
+    })
 
-    if current_cmf > 0.05:
-        score += 10
-        cmf_status = f"+{current_cmf:.2f} (Güçlü Para Girişi)"
-    elif current_cmf >= -0.05:
-        score += 5
-        cmf_status = f"{current_cmf:+.2f} (Dengeli Para Akışı)"
-    else:
-        cmf_status = f"{current_cmf:.2f} (Nötr)"
-
-    phase = "🔥 YATAYDAN DİKEYE GEÇİŞ (HAZIRLIK TAMAM)" if score >= 80 else ("⏳ TABANDA SESSİZ MAL TOPLAMA" if score >= 60 else "⚪ DÜZELTME / ARA BÖLGE")
-    action = "GİRİŞ / İLK KADEME ALIM" if score >= 80 else ("DÜŞÜŞTE DESTEKTEN TOPLA" if score >= 60 else "İZLEMEDE KAL")
+    phase = "🔥 YATAYDAN DİKEYE GEÇİŞ (TABAN KIRILIMI)" if score >= 80 else "⏳ TABANDA SESSİZ MAL TOPLAMA"
+    action = "GİRİŞ / İLK KADEME ALIM" if score >= 80 else "DÜŞÜŞTE DESTEKTEN TOPLA"
 
     stop_loss = round(current_price * 0.93, 2)
     target_1 = round(current_price * 1.25, 2)
@@ -267,10 +283,13 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     entry_high = round(current_price * 1.01, 2)
 
     return {
+        "allow": True,
         "score": score,
         "phase": phase,
         "action": action,
         "price": current_price,
+        "sektor": kat_info["sektor"],
+        "katalizor": kat_info["katalizor"],
         "low_52w": low_52w,
         "high_52w": high_52w,
         "prim_52w": prim_52w,
@@ -285,37 +304,38 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
         "stop_loss": stop_loss,
         "target_1": target_1,
         "target_2": target_2,
-        "target_3": target_3,
-        "reasons": reasons
+        "target_3": target_3
     }
 
 def format_rich_stock_card(ticker: str, data: dict) -> str:
-    score = data.get("score", 60)
-    badge = "🔥" if score >= 80 else ("⏳" if score >= 60 else "⚪")
+    score = data.get("score", 75)
+    badge = "🔥" if score >= 80 else "⏳"
     
     lines = [
         f"{badge} *{ticker}* ── *HAZIRLIK SKORU: %{score}*",
         f"────────────────────────────",
-        f"📊 *1. AKÜMÜLASYON & PARA AKIŞI:*",
-        f"• Para Girişi (CMF): `{data.get('cmf_str', 'Nötr')}`",
-        f"• RSI (14G): `{data.get('rsi', 50):.1f} (Soğumuş/Taban)`",
-        f"• 52H Dip Durumu: `{data.get('low_52w', 0):.2f} TL ({data.get('prim_52w', 1.0):.2f}x)`",
+        f"🎯 *Evre Durumu:* *{data.get('phase')}*",
+        f"🏭 *Sektör & Tema:* `{data.get('sektor')}`",
+        f"📰 *KAP & Büyüme Hikayesi:* {data.get('katalizor')}",
         f"────────────────────────────",
-        f"🎯 *2. WYCKOFF SIKIŞMA VE TEKNİK YAPI:*",
+        f"📊 *AKÜMÜLASYON & PARA AKIŞI:*",
+        f"• Para Girişi (CMF): `{data.get('cmf_str')}`",
+        f"• RSI (14G): `{data.get('rsi', 50):.1f} (Aşırı Alımdan Uzak / Taban)`",
+        f"• 52H Dip Durumu: `{data.get('low_52w', 0):.2f} TL ({data.get('prim_52w', 1.0):.2f}x - Dipte)`",
+        f"────────────────────────────",
+        f"🎯 *WYCKOFF SIKIŞMA VE TEKNİK YAPI:*",
         f"• Güncel Fiyat: `{data.get('price', 0):.2f} TL`",
         f"• 20G Sıkışma Bandı: `{data.get('low_20d', 0):.2f} - {data.get('high_20d', 0):.2f} TL (%{data.get('range_pct', 0):.1f})`",
         f"• Hareketli Ortalamalar: `20 EMA: {data.get('ema_20', 0):.2f} TL | 50 EMA: {data.get('ema_50', 0):.2f} TL`",
-        f"• Evre Kararı: *{data.get('phase')}*",
         f"────────────────────────────",
-        f"💡 *3. ASİMETRİK OPERASYONEL TRADE PLANI:*",
+        f"💡 *ASİMETRİK OPERASYONEL TRADE PLANI:*",
         f"• 🎯 Önerilen Giriş Aralığı: `{data.get('entry_range')}`",
         f"• 🛑 Stop-Loss (%7): `{data.get('stop_loss', 0):.2f} TL` *(Kapanış şartı)*",
-        f"• 🥇 Hedef 1 (Kısa Vade / +%25): `{data.get('target_1', 0):.2f} TL`",
-        f"• 🚀 Hedef 2 (Ana Trend / +%50): `{data.get('target_2', 0):.2f} TL`",
-        f"• 💎 Hedef 3 (Patlama / +%100): `{data.get('target_3', 0):.2f} TL`",
-        f"• Risk / Ödül Oranı (R:R): `1 : 7.1`",
+        f"• 🥇 Hedef 1 (+%25): `{data.get('target_1', 0):.2f} TL`",
+        f"• 🚀 Hedef 2 (+%50): `{data.get('target_2', 0):.2f} TL`",
+        f"• 💎 Hedef 3 (+%100): `{data.get('target_3', 0):.2f} TL`",
+        f"• Risk / Ödül Oranı: `1 : 7.1`",
         f"────────────────────────────",
-        f"📝 *Strateji Notu:* Fiyat 20 EMA üzerinde konsolide oldu, satıcılar kurudu. İlk hacim teyidinde yataydan dikeye geçiş potansiyeli yüksek.",
         f"🔗 [TradingView Grafiği](https://tr.tradingview.com/symbols/BIST-{ticker}/) | [KAP Şirket Bilgisi](https://www.kap.org.tr/tr/sirket-bilgileri/genel/{ticker})"
     ]
     return "\n".join(lines)
@@ -327,8 +347,8 @@ def run_watchlist_scan_async():
         return
 
     is_scanning = True
-    active_pool = list(DYNAMIC_WATCHLIST)
-    send_tg(f"⏳ *BIST DETAYLI TABAN SIKIŞMASI TARANIYOR...*\n📊 Taranan Hisse Sayısı: `{len(active_pool)}`\nLütfen 5-8 saniye bekleyin.")
+    active_pool = [t for t in DYNAMIC_WATCHLIST if t not in KARA_LISTE]
+    send_tg(f"⏳ *BIST SEKTÖREL TABAN SIKIŞMASI TARANIYOR...*\n🛡 Kara Liste & Konkordato Koruması Devrede\n📊 Taranan Güvenli Hisse: `{len(active_pool)}`\nLütfen 5-8 saniye bekleyin.")
     results = []
     
     try:
@@ -342,8 +362,8 @@ def run_watchlist_scan_async():
                 if sym in batch_data:
                     df_t = batch_data[sym].dropna()
                     if not df_t.empty and len(df_t) >= 15:
-                        res = calculate_pre_pump_readiness(df_t)
-                        if res.get("prim_52w", 99) <= 1.45 and res.get("score", 0) >= 60:
+                        res = calculate_pre_pump_readiness(df_t, ticker)
+                        if res.get("allow", False):
                             results.append({"ticker": ticker, **res})
             except Exception:
                 pass
@@ -351,15 +371,16 @@ def run_watchlist_scan_async():
         print("Tarama Hatası:", e)
 
     if not results:
-        send_tg("ℹ️ *TARAMA TAMAMLANDI*\n\nTaranan hisseler arasında şu an katı taban sıkışmasında olan uygun hisse bulunamadı (Diğer hisseler primli veya dalgalı).")
+        send_tg("ℹ️ *TARAMA TAMAMLANDI*\nTaranan hisseler arasında şu an güvenli taban sıkışmasında olan hisse bulunamadı.")
         is_scanning = False
         return
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
-    send_tg(f"📊 *BIST YATAYDAN DİKEYE GEÇİŞ (TABAN AKÜMÜLASYON) RAPORU* 📊\n🛡 *Filtre:* 52H Dip (≤ 1.45x) & Dar Sıkışma\n──────────────")
+    send_tg(f"📊 *BIST GÜVENLİ TABAN SIKIŞMASI RAPORU* 📊\n🛡 *Filtre:* Konkordato Korumalı, 52H Dip (≤ 1.45x) & Dar Sıkışma\n──────────────")
 
-    for item in results[:3]:
+    # En az 4 Güçlü Adayı Gönder
+    for item in results[:4]:
         card_text = format_rich_stock_card(item["ticker"], item)
         send_tg(card_text)
         time.sleep(0.5)
@@ -385,7 +406,7 @@ def parse_disclosure_data(d):
     ticker_match = re.search(r"\b([A-Z]{4,5})\b\s*(PAY|HİSSE|ORTAKLIK|A\.Ş)", full_text)
     ticker = ticker_match.group(1) if ticker_match else "BELİRTİLMEDİ"
     
-    if ticker != "BELİRTİLMEDİ" and ticker not in DYNAMIC_WATCHLIST:
+    if ticker != "BELİRTİLMEDİ" and ticker not in KARA_LISTE and ticker not in DYNAMIC_WATCHLIST:
         DYNAMIC_WATCHLIST.add(ticker)
 
     ratio_match = re.search(r"%\s*([0-9]+[,\.][0-9]+)", full_text)
@@ -416,7 +437,7 @@ def parse_disclosure_data(d):
 
 def bot_worker():
     print("🚀 BIST Smart Money Worker Başlatıldı.")
-    send_tg("🟢 *BIST SMART MONEY & FON SAKLAMA SİSTEMİ AKTİF*\n\n• `/tara` : Taban sıkışması biten hisseleri listeler.\n• `/fon LOGO` veya `/fon MPARK` : Fonda taşınan lot ve virman dökümünü verir!")
+    send_tg("🟢 *BIST SMART MONEY MOTORU AKTİF*\n\n• Hazırlık Skoru (% Puanı) korundu.\n• Sektör, Büyüme Hikayesi & Konkordato Koruması Devrede (En az 4 hisse).\n• `/tara` veya `/fon LOGO` yazabilirsiniz!")
     
     seen = set()
     last_update_id = None
@@ -434,14 +455,14 @@ def bot_worker():
                 if text_lower.startswith("/fon") or text_lower.startswith("fon"):
                     parts = text.split()
                     if len(parts) >= 2:
-                        target_ticker = parts.strip()
+                        target_ticker = str(parts).strip()
                         threading.Thread(target=send_fund_holdings, args=(target_ticker,), daemon=True).start()
                     else:
                         send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: `/fon LOGO` veya `/fon MPARK`")
                 elif text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
                     threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
                 elif text_lower in ["/start", "start", "/yardim"]:
-                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Yataydan dikeye geçiş taban hisselerini listeler.\n• `/fon HISSE` : Hissedeki fon lotlarını ve virman durumunu döker (Örn: `/fon LOGO`).\n• Canlı KAP alımları otomatik gelir.")
+                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• `/fon HISSE` : Hissedeki fon lotlarını ve virman durumunu döker (Örn: `/fon LOGO`).\n• Canlı KAP alımları otomatik gelir.")
 
             now = time.time()
             if now - last_kap_check >= 60:
@@ -485,3 +506,4 @@ t.start()
 
 if __name__ == "__main__":
     run_web_server()
+EOF
