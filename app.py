@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# ==================== STANDART HEALTH CHECK WEB SUNUCUSU ====================
+# ==================== HEALTH CHECK WEB SUNUCUSU ====================
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -58,7 +58,7 @@ def get_tg_updates(offset=None):
 def get_kap_disclosures():
     url = "https://www.kap.org.tr/tr/api/disclosures"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Referer": "https://www.kap.org.tr/"
     }
     try:
@@ -69,44 +69,19 @@ def get_kap_disclosures():
         print("KAP Hatası:", e)
     return []
 
-def get_stock_df(ticker: str) -> pd.DataFrame:
-    try:
-        import yfinance as yf
-        df = yf.download(f"{ticker}.IS", period="6mo", interval="1d", progress=False)
-        if not df.empty and len(df) >= 20:
-            return df
-    except Exception as e:
-        print(f"yfinance ({ticker}):", e)
-
-    try:
-        url = f"https://www.isyatirim.com.tr/_layouts/15/IsYatirim.Website/Common/ChartData.aspx/Index2?period=1440&code={ticker}.E.BIST"
-        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.isyatirim.com.tr/"}
-        r = requests.get(url, headers=headers, timeout=8)
-        if r.status_code == 200 and r.text:
-            data = r.json()
-            if isinstance(data, list) and len(data) >= 20:
-                df = pd.DataFrame(data, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-                for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                return df.dropna()
-    except Exception as e:
-        print(f"İş Yatırım ({ticker}):", e)
-
-    return pd.DataFrame()
-
 def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
-    if df.empty or len(df) < 20:
+    if df.empty or len(df) < 15:
         return {"score": 0, "phase": "YETERSIZ_VERI", "reasons": []}
 
-    high_20d = float(df['High'].tail(20).max())
-    low_20d = float(df['Low'].tail(20).min())
+    high_20d = float(df['High'].tail(min(len(df), 20)).max())
+    low_20d = float(df['Low'].tail(min(len(df), 20)).min())
     current_price = float(df['Close'].iloc[-1])
     range_pct = ((high_20d - low_20d) / low_20d) * 100 if low_20d > 0 else 0
 
     sma_20 = df['Close'].rolling(min(len(df), 20)).mean()
     std_20 = df['Close'].rolling(min(len(df), 20)).std().fillna(0)
     bb_width = ((sma_20 + std_20*2) - (sma_20 - std_20*2)) / sma_20 * 100
-    is_squeezing = float(bb_width.iloc[-1]) <= float(bb_width.tail(min(len(df), 60)).min()) * 1.35
+    is_squeezing = float(bb_width.iloc[-1]) <= float(bb_width.tail(min(len(df), 60)).min()) * 1.35 if len(df) >= 20 else False
 
     mf_multiplier = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'])
     mf_multiplier = mf_multiplier.fillna(0)
@@ -115,7 +90,6 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     current_cmf = float(cmf_20.iloc[-1]) if not cmf_20.empty and not np.isnan(cmf_20.iloc[-1]) else 0
 
     ema_20 = float(df['Close'].ewm(span=min(len(df), 20), adjust=False).mean().iloc[-1])
-    ema_50 = float(df['Close'].ewm(span=min(len(df), 50), adjust=False).mean().iloc[-1])
     low_52w = float(df['Low'].min())
     prim_52w = current_price / low_52w if low_52w > 0 else 1.0
 
@@ -143,12 +117,12 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
         score += 15
         reasons.append(f"Pozitif para akışı (CMF: {current_cmf:+.2f})")
 
-    if current_price >= ema_20 and is_squeezing:
+    if current_price >= ema_20:
         score += 25
-        reasons.append("20 EMA üzerinde sıkışma kırılımı")
-    elif current_price >= ema_20:
-        score += 15
-        reasons.append("20 EMA üzerinde")
+        reasons.append("20 EMA üzerinde tutunuyor")
+    else:
+        score += 10
+        reasons.append("Destek arayışında")
 
     if score >= 70:
         phase = "🔥 PATLAMA / HAREKET EŞİĞİNDE"
@@ -171,18 +145,51 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     }
 
 def run_watchlist_scan():
-    send_tg("⏳ *CANLI BIST & 15-30 GÜNLÜK AKÜMÜLASYON TARAMASI BAŞLADI...*\nLütfen 10-15 saniye bekleyin.")
+    send_tg("⏳ *CANLI BIST & 15-30 GÜNLÜK AKÜMÜLASYON TARAMASI BAŞLADI...*\nLütfen 3-5 saniye bekleyin.")
     results = []
     
-    for ticker in IZLEME_HAVUZU:
-        df = get_stock_df(ticker)
-        if not df.empty:
-            res = calculate_pre_pump_readiness(df)
-            if res.get("score", 0) > 0:
-                results.append({"ticker": ticker, **res})
+    # 1. Hızlı Paralel Toplu İndirme (Tüm hisseler aynı anda 1.5 saniyede iner)
+    try:
+        import yfinance as yf
+        symbols = [f"{t}.IS" for t in IZLEME_HAVUZU]
+        batch_data = yf.download(symbols, period="6mo", interval="1d", group_by='ticker', threads=True, progress=False, timeout=8)
+        
+        for ticker in IZLEME_HAVUZU:
+            sym = f"{ticker}.IS"
+            try:
+                if sym in batch_data:
+                    df_t = batch_data[sym].dropna()
+                    if not df_t.empty and len(df_t) >= 15:
+                        res = calculate_pre_pump_readiness(df_t)
+                        if res.get("score", 0) > 0:
+                            results.append({"ticker": ticker, **res})
+            except Exception:
+                pass
+    except Exception as e:
+        print("Toplu indirme hatası:", e)
+
+    # 2. Yedek İş Yatırım Hattı
+    if len(results) < 3:
+        for ticker in IZLEME_HAVUZU:
+            if any(r["ticker"] == ticker for r in results): continue
+            try:
+                url = f"https://www.isyatirim.com.tr/_layouts/15/IsYatirim.Website/Common/ChartData.aspx/Index2?period=1440&code={ticker}.E.BIST"
+                headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.isyatirim.com.tr/"}
+                r = requests.get(url, headers=headers, timeout=3)
+                if r.status_code == 200 and r.text:
+                    data = r.json()
+                    if isinstance(data, list) and len(data) >= 15:
+                        df = pd.DataFrame(data, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
+                        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                        res = calculate_pre_pump_readiness(df.dropna())
+                        if res.get("score", 0) > 0:
+                            results.append({"ticker": ticker, **res})
+            except Exception:
+                pass
 
     if not results:
-        send_tg("⚠️ Veri bağlantısı tazeleniyor, lütfen birazdan tekrar /tara yazın.")
+        send_tg("⚠️ Veri hattı anlık meşgul, lütfen 30 saniye sonra tekrar /tara yazın.")
         return
 
     results.sort(key=lambda x: x["score"], reverse=True)
@@ -252,7 +259,7 @@ def parse_disclosure_data(d):
 
 def bot_worker():
     print("🚀 Render BIST Smart Money Bot Başlatıldı.")
-    send_tg("🟢 *BIST SMART MONEY BOTU CANLIYA ALINDI (RENDER)*\n\n• Canlı BIST & KAP veri hattı devrede.\n• Telegram'dan `/tara` yazarak taramayı başlatabilirsin!")
+    send_tg("🟢 *BIST SMART MONEY BOTU AKTİF (RENDER HIZLI MOD)*\n\n• Paralel çoklu veri hattı devrede.\n• Telegram'dan `/tara` yazarak anında tarama yapabilirsin!")
     
     seen = set()
     last_update_id = None
@@ -306,9 +313,8 @@ def bot_worker():
         except Exception as e:
             print("Worker Hatası:", e)
 
-        time.sleep(3)
+        time.sleep(2)
 
-# Arka planda bot iş parçacığını başlat
 t = threading.Thread(target=bot_worker, daemon=True)
 t.start()
 
