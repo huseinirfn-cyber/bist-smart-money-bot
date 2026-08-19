@@ -253,3 +253,115 @@ def run_watchlist_scan_async():
         time.sleep(0.5)
 
     is_scanning = False
+
+def parse_disclosure_data(d):
+    global DYNAMIC_WATCHLIST
+    c_name = d.get("companyName", "").upper()
+    title = d.get("title", "")
+    summary = d.get("summary", "")
+    full_text = f"{title} {summary}".upper()
+    
+    is_target_inst = any(k in c_name for k in HEDEF_KURUMLAR)
+    is_target_fund = any(f"[{f}]" in full_text or f" {f} " in full_text for f in HEDEF_FONLAR)
+    is_share_action = any(k in full_text for k in [
+        "PAY ALIM", "PAY SATIM", "SERMAYE PİYASASI ARACI ALIM", "SINIRINA ULAŞTI", "ORANINA ULAŞTI", "PORTFÖY DAĞILIM", "ÖZEL DURUM"
+    ])
+
+    if not ((is_target_inst or is_target_fund) and is_share_action):
+        return None
+
+    ticker_match = re.search(r"\b([A-Z]{4,5})\b\s*(PAY|HİSSE|ORTAKLIK|A\.Ş)", full_text)
+    ticker = ticker_match.group(1) if ticker_match else "BELİRTİLMEDİ"
+    
+    if ticker != "BELİRTİLMEDİ" and ticker not in DYNAMIC_WATCHLIST:
+        DYNAMIC_WATCHLIST.add(ticker)
+
+    ratio_match = re.search(r"%\s*([0-9]+[,\.][0-9]+)", full_text)
+    ratio = float(ratio_match.group(1).replace(",", ".")) if ratio_match else None
+
+    lot_match = re.search(r"([0-9\.,]+)\s*ADET", full_text)
+    lot_str = lot_match.group(1).replace(".", "").replace(",", ".") if lot_match else None
+    lot = float(lot_str) if lot_str else None
+
+    price_match = re.search(r"([0-9]+[,\.][0-9]+)\s*-\s*([0-9]+[,\.][0-9]+)\s*TL", full_text)
+    if not price_match:
+        price_match = re.search(r"([0-9]+[,\.][0-9]+)\s*TL\s*(FİYATTAN|FİYATLA)", full_text)
+    price_info = price_match.group(0) if price_match else "Bildirim detayında"
+
+    action = "ALIM" if any(w in full_text for w in ["ALDI", "ALINDI", "EDİNİLDİ", "ALIM"]) else ("SATIM" if "SAT" in full_text else "EŞİK BİLDİRİMİ")
+
+    return {
+        "ticker": ticker,
+        "inst": c_name,
+        "action": action,
+        "ratio": ratio,
+        "lot": lot,
+        "price_info": price_info,
+        "title": title,
+        "id": str(d.get("disclosureIndex", "")),
+        "date": d.get("publishDate", "")
+    }
+
+def bot_worker():
+    print("🚀 BIST Smart Money Worker Başlatıldı.")
+    send_tg("🟢 *BIST DETAYLI ANALİZ MOTORU GÜNCELLENDİ (RENDER)*\n\n• Zenginleştirilmiş Wyckoff & Trade Kartı devrede.\n• `/tara` yazarak detaylı raporu görebilirsin!")
+    
+    seen = set()
+    last_update_id = None
+    last_kap_check = 0
+
+    while True:
+        try:
+            updates = get_tg_updates(offset=last_update_id)
+            for u in updates:
+                last_update_id = u["update_id"] + 1
+                msg = u.get("message", {})
+                text = msg.get("text", "").strip().lower()
+                
+                if text in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
+                    threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
+                elif text in ["/start", "start", "/yardim"]:
+                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Taban sıkışması biten hisselerin detaylı trade planını döker.\n• Canlı KAP alımları anında telefonuna düşer.")
+
+            now = time.time()
+            if now - last_kap_check >= 60:
+                last_kap_check = now
+                items = get_kap_disclosures()
+                for d in items:
+                    did = str(d.get("disclosureIndex", ""))
+                    if not did or did in seen: continue
+                    seen.add(did)
+                    
+                    sig = parse_disclosure_data(d)
+                    if not sig: continue
+
+                    lot_txt = f"{sig['lot']:,.0f} Lot" if sig['lot'] else "Detayda"
+                    ratio_txt = f"%{sig['ratio']}" if sig['ratio'] else "Sınır Bildirimi"
+
+                    msg = (
+                        f"🚨 *CANLI KURUMSAL PAY ALIM ALARMI* 🚨\n"
+                        f"────────────────────\n"
+                        f"📌 *Hisse:* `{sig['ticker']}`\n"
+                        f"🏛 *Kurum:* {sig['inst']}\n"
+                        f"📊 *Yeni Sermaye Payı:* `{ratio_txt}`\n"
+                        f"📦 *İşlem Lotu:* `{lot_txt}`\n"
+                        f"💰 *İşlem Fiyatı:* `{sig['price_info']}`\n"
+                        f"🕒 *Tarih:* {sig['date']}\n"
+                        f"────────────────────\n"
+                        f"🔗 [KAP Bildirimi](https://www.kap.org.tr/tr/Bildirim/{sig['id']})"
+                    )
+                    send_tg(msg)
+                    print(f"KAP Gönderildi: {sig['ticker']}")
+
+                if len(seen) > 1000: seen = set(list(seen)[-500:])
+
+        except Exception as e:
+            print("Worker Hatası:", e)
+
+        time.sleep(1)
+
+t = threading.Thread(target=bot_worker, daemon=True)
+t.start()
+
+if __name__ == "__main__":
+    run_web_server()
