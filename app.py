@@ -15,7 +15,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
-        self.wfile.write(b'{"status":"online","service":"BIST Smart Money Self-Feeding Bot"}')
+        self.wfile.write(b'{"status":"online","service":"BIST Smart Money Bot","time":"ok"}')
     def log_message(self, format, *args):
         pass
 
@@ -34,7 +34,6 @@ HEDEF_KURUMLAR = [
 ]
 HEDEF_FONLAR = ["TLY", "THF", "DUH", "PHE", "DHV", "DOH", "PCS", "PUK", "KPC", "LTL", "MAC", "TI2", "IIH"]
 
-# BAŞLANGIÇ ÇEKİRDEK HAVUZU (Fon alımlarıyla otomatik büyüyecek ve güncellenecek)
 DYNAMIC_WATCHLIST = {
     "TRMET", "BETAE", "TRALT", "BIGEN", "SDTTR", "PATEK", "ARDYZ", "ONCSM", 
     "NETCD", "MOBTL", "LOGO", "VBTYZ", "PAPIL", "ALVES", "AGROT", "BINHO", 
@@ -43,6 +42,8 @@ DYNAMIC_WATCHLIST = {
     "TRHOL", "DAPGM", "TEHOL", "PEKGY", "SELEC", "MPARK", "TABGD", "GOKNR", 
     "KRVGD", "MEYSU", "EBEBK", "PASEU", "KTLEV", "GUNDG", "KARCL"
 }
+
+is_scanning = False  # Eş zamanlı çakışmayı önleyen kilit
 
 def send_tg(msg):
     try:
@@ -56,8 +57,8 @@ def send_tg(msg):
 
 def get_tg_updates(offset=None):
     try:
-        params = {"timeout": 2, "offset": offset}
-        r = requests.get(f"https://api.telegram.org/bot{TOKEN}/getUpdates", params=params, timeout=5)
+        params = {"timeout": 1, "offset": offset}
+        r = requests.get(f"https://api.telegram.org/bot{TOKEN}/getUpdates", params=params, timeout=4)
         if r.status_code == 200:
             return r.json().get("result", [])
     except Exception:
@@ -71,7 +72,7 @@ def get_kap_disclosures():
         "Referer": "https://www.kap.org.tr/"
     }
     try:
-        r = requests.get(url, headers=headers, timeout=15)
+        r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             return r.json()
     except Exception as e:
@@ -86,7 +87,7 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     low_52w = float(df['Low'].min())
     prim_52w = current_price / low_52w if low_52w > 0 else 1.0
 
-    # ⛔ KATI KURAL: 52H Dibe göre 1.45x'ten fazla primliyse DİREKT ELE
+    # Katı taban filtresi: 1.45x üstü (primli) elenir
     if prim_52w > 1.45:
         return {"score": 0, "phase": "AŞIRI PRİMLİ / TEPE RİSKİ", "reasons": []}
 
@@ -143,15 +144,22 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
         "reasons": reasons
     }
 
-def run_watchlist_scan():
+def run_watchlist_scan_async():
+    """Arka planda ana döngüyü kitlemeden çalışan asenkron tarama."""
+    global is_scanning
+    if is_scanning:
+        send_tg("⏳ Zaten devam eden bir tarama var, lütfen birkaç saniye bekleyin.")
+        return
+
+    is_scanning = True
     active_pool = list(DYNAMIC_WATCHLIST)
-    send_tg(f"⏳ *BIST GENELİ TABAN SIKIŞMASI TARAMASI BAŞLADI...*\n📊 Taranan Dinamik Hisse Sayısı: `{len(active_pool)}`\nLütfen 5-8 saniye bekleyin.")
+    send_tg(f"⏳ *CANLI BIST TABAN SIKIŞMASI TARANIYOR...*\n📊 Havuz: `{len(active_pool)} Hisse` (Lütfen 5-8 sn bekleyin)")
     results = []
     
     try:
         import yfinance as yf
         symbols = [f"{t}.IS" for t in active_pool]
-        batch_data = yf.download(symbols, period="6mo", interval="1d", group_by='ticker', threads=True, progress=False, timeout=12)
+        batch_data = yf.download(symbols, period="6mo", interval="1d", group_by='ticker', threads=True, progress=False, timeout=10)
         
         for ticker in active_pool:
             sym = f"{ticker}.IS"
@@ -168,16 +176,16 @@ def run_watchlist_scan():
         print("Tarama Hatası:", e)
 
     if not results:
-        send_tg("ℹ️ *TARAMA TAMAMLANDI*\n\nTaranan hisseler arasında şu an taban sıkışmasında olan uygun hisse bulunamadı (Tüm hisseler ya primli ya da aşırı dalgalı).")
+        send_tg("ℹ️ *TARAMA TAMAMLANDI*\n\nTaranan hisseler arasında şu an katı taban sıkışmasında olan uygun hisse bulunamadı (Diğer hisseler primli veya dalgalı).")
+        is_scanning = False
         return
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
     msg_lines = [
-        "📊 *BIST YATAYDAN DİKEYE GEÇİŞ (TABAN AKÜMÜLASYON) RAPORU* 📊",
+        "📊 *BIST YATAYDAN DİKEYE GEÇİŞ (TABAN) RAPORU* 📊",
         "────────────────────",
-        f"🛡 *Kriter:* 52H Dip (≤ 1.45x) & Dar Bant Sıkışması",
-        f"🌐 *Dinamik Havuz Büyüklüğü:* `{len(active_pool)} Hisse`",
+        f"🛡 *Filtre Kriteri:* 52H Dip (≤ 1.45x) & Dar Bant Sıkışması",
         "────────────────────"
     ]
     for item in results[:5]:
@@ -192,8 +200,9 @@ def run_watchlist_scan():
             "────────────────────"
         ])
     
-    msg_lines.append("💡 İstediğin zaman Telegram'dan `/tara` yazarak güncel taramayı çalıştırabilirsin.")
+    msg_lines.append("💡 İstediğin zaman tekrar `/tara` yazabilirsin.")
     send_tg("\n".join(msg_lines))
+    is_scanning = False
 
 def parse_disclosure_data(d):
     global DYNAMIC_WATCHLIST
@@ -214,11 +223,8 @@ def parse_disclosure_data(d):
     ticker_match = re.search(r"\b([A-Z]{4,5})\b\s*(PAY|HİSSE|ORTAKLIK|A\.Ş)", full_text)
     ticker = ticker_match.group(1) if ticker_match else "BELİRTİLMEDİ"
     
-    # 🔄 GERİ BESLEME & OTOMATİK EVREN ÖĞRENME:
-    # Eğer fon yeni bir hisseye alım yaptıysa, hisseyi otomatik olarak dinamik havuza ekle!
     if ticker != "BELİRTİLMEDİ" and ticker not in DYNAMIC_WATCHLIST:
         DYNAMIC_WATCHLIST.add(ticker)
-        print(f"🔄 [GERİ BESLEME] Fon yeni hisseye girdi, tarama havuzuna eklendi: {ticker}")
 
     ratio_match = re.search(r"%\s*([0-9]+[,\.][0-9]+)", full_text)
     ratio = float(ratio_match.group(1).replace(",", ".")) if ratio_match else None
@@ -247,8 +253,8 @@ def parse_disclosure_data(d):
     }
 
 def bot_worker():
-    print("🚀 BIST Smart Money Self-Feeding Bot Başlatıldı.")
-    send_tg("🟢 *BIST SMART MONEY SELF-FEEDING BOT AKTİF (RENDER)*\n\n• Kendi kendini güncelleyen dinamik evren devrede.\n• Fonların yeni girdiği hisseler havuza otomatik eklenecektir.\n• `/tara` yazarak canlı taramayı başlatabilirsin!")
+    print("🚀 BIST Smart Money Worker Başlatıldı.")
+    send_tg("🟢 *BIST SMART MONEY BOTU CANLI & KESİNTİSİZ HATTA*\n\n• Asenkron hızlı mod devrede.\n• İstediğin an sınırsız `/tara` yazabilirsin!")
     
     seen = set()
     last_update_id = None
@@ -256,6 +262,7 @@ def bot_worker():
 
     while True:
         try:
+            # 1. Telegram Komutlarını Dinle
             updates = get_tg_updates(offset=last_update_id)
             for u in updates:
                 last_update_id = u["update_id"] + 1
@@ -263,10 +270,12 @@ def bot_worker():
                 text = msg.get("text", "").strip().lower()
                 
                 if text in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
-                    run_watchlist_scan()
+                    # Ayrı bir thread başlatarak ana dinleyiciyi ASLA kitleme!
+                    threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
                 elif text in ["/start", "start", "/yardim"]:
-                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Dinamik havuzdaki taban hisselerini listeler.\n• 7/24 Canlı KAP bildirimleri anında telefonuna düşer.")
+                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Taban sıkışması biten ve patlamaya hazır hisseleri listeler.\n• 7/24 Canlı KAP bildirimleri otomatik telefonuna düşer.")
 
+            # 2. KAP API Dinle (60 saniyede bir)
             now = time.time()
             if now - last_kap_check >= 60:
                 last_kap_check = now
@@ -300,9 +309,9 @@ def bot_worker():
                 if len(seen) > 1000: seen = set(list(seen)[-500:])
 
         except Exception as e:
-            print("Worker Hatası:", e)
+            print("Döngü Hatası:", e)
 
-        time.sleep(2)
+        time.sleep(1)
 
 t = threading.Thread(target=bot_worker, daemon=True)
 t.start()
