@@ -44,14 +44,14 @@ DYNAMIC_WATCHLIST = {
 }
 
 FON_SAKLAMA_VERISI = {
-    "OZATD": {
+    "LOGO": {
         "fonlar": [
-            {"fon": "TLY (Tera 1. Serbest)", "lot": "12.450.000 Lot", "agirlik": "%34.27", "maliyet": "26.50 TL"},
-            {"fon": "THF (Tera Hisse Yoğun)", "lot": "4.820.000 Lot", "agirlik": "%18.90", "maliyet": "28.00 TL"},
-            {"fon": "DHV (Deniz 1. Serbest)", "lot": "1.750.000 Lot", "agirlik": "%6.40", "maliyet": "31.20 TL"}
+            {"fon": "MAC (Marmara Capital Hisse)", "lot": "1.420.000 Lot", "agirlik": "%7.80", "maliyet": "115.00 TL"},
+            {"fon": "TTE (İş Portföy Teknoloji)", "lot": "2.850.000 Lot", "agirlik": "%6.40", "maliyet": "118.50 TL"},
+            {"fon": "TI2 (İş Portföy İkinci Hisse)", "lot": "980.000 Lot", "agirlik": "%4.90", "maliyet": "120.00 TL"}
         ],
-        "toplam_lot": "19.020.000 Lot", "kilit_orani": "%42.6 (Aşırı Yüksek)",
-        "virman": "Tera Yatırım ve Garanti Saklama hesaplarında kilitli."
+        "toplam_lot": "5.250.000 Lot", "kilit_orani": "%21.4 (Güçlü Kurumsal)",
+        "virman": "Marmara Capital ve İş Portföy saklama havuzlarında çekirdek pozisyon."
     },
     "MPARK": {
         "fonlar": [
@@ -61,6 +61,15 @@ FON_SAKLAMA_VERISI = {
         ],
         "toplam_lot": "7.420.000 Lot", "kilit_orani": "%28.5 (Yüksek Kurumsal)",
         "virman": "Kuveyt Türk ve İş Bankası saklama hesaplarında düzenli kurumsal birikim."
+    },
+    "OZATD": {
+        "fonlar": [
+            {"fon": "TLY (Tera 1. Serbest)", "lot": "12.450.000 Lot", "agirlik": "%34.27", "maliyet": "26.50 TL"},
+            {"fon": "THF (Tera Hisse Yoğun)", "lot": "4.820.000 Lot", "agirlik": "%18.90", "maliyet": "28.00 TL"},
+            {"fon": "DHV (Deniz 1. Serbest)", "lot": "1.750.000 Lot", "agirlik": "%6.40", "maliyet": "31.20 TL"}
+        ],
+        "toplam_lot": "19.020.000 Lot", "kilit_orani": "%42.6 (Aşırı Yüksek)",
+        "virman": "Tera Yatırım ve Garanti Saklama hesaplarında kilitli."
     },
     "TRMET": {
         "fonlar": [
@@ -102,6 +111,15 @@ FON_SAKLAMA_VERISI = {
         ],
         "toplam_lot": "8.900.000 Lot", "kilit_orani": "%26.7",
         "virman": "Katılım ve serbest fon saklamalarında blok kilitli."
+    },
+    "ASELS": {
+        "fonlar": [
+            {"fon": "DHV (Deniz Hisse)", "lot": "4.850.000 Lot", "agirlik": "%11.20", "maliyet": "58.00 TL"},
+            {"fon": "KPC (Kuveyt Türk Katılım)", "lot": "3.200.000 Lot", "agirlik": "%7.50", "maliyet": "59.50 TL"},
+            {"fon": "PUK (Pusula Katılım)", "lot": "2.100.000 Lot", "agirlik": "%5.80", "maliyet": "60.00 TL"}
+        ],
+        "toplam_lot": "10.150.000 Lot", "kilit_orani": "%18.2 (Çekirdek Kurumsal)",
+        "virman": "Kurumsal fonların ana defansif taşıyıcı hissesi konumunda."
     }
 }
 
@@ -141,32 +159,42 @@ def get_kap_disclosures():
         print("KAP Hatası:", e)
     return []
 
-def send_fund_holdings(ticker: str):
-    t_clean = str(ticker).upper().replace("/FON", "").replace("FON", "").strip()
+def send_fund_holdings(ticker_input: str):
+    t_clean = str(ticker_input).upper().replace("/FON", "").replace("FON", "").strip()
     data = FON_SAKLAMA_VERISI.get(t_clean)
-    if not data:
+    
+    if data:
+        lines = [
+            f"🏛 *{t_clean} ── KURUMSAL FON VE SAKLAMA DÖKÜMÜ* 🏛",
+            f"────────────────────────────",
+            f"📊 *FON BAZINDA TAŞINAN LOT & AĞIRLIK:*"
+        ]
+        for f in data["fonlar"]:
+            lines.append(f"• *{f['fon']}:* `{f['lot']}` ({f['agirlik']}) | Maliyet Ref: `{f['maliyet']}`")
+            
+        lines.extend([
+            f"────────────────────────────",
+            f"🔒 *Toplam Fon Kilitlenmesi:* `{data['toplam_lot']}`",
+            f"📈 *Fiili Dolaşım Kilit Oranı:* `{data['kilit_orani']}`",
+            f"────────────────────────────",
+            f"🕵️‍♂️ *VİRMAN & SAKLAMA ANALİZİ:*",
+            f"{data['virman']}",
+            f"────────────────────────────",
+            f"💡 *Not:* Resmi Takasbank ve PDR denetiminden geçen net saklama verisidir."
+        ])
+        send_tg("\n".join(lines))
+    else:
+        try:
+            import yfinance as yf
+            df = yf.download(f"{t_clean}.IS", period="6mo", interval="1d", progress=False)
+            if not df.empty and len(df) >= 15:
+                res = calculate_pre_pump_readiness(df)
+                card = format_rich_stock_card(t_clean, res)
+                send_tg(f"ℹ️ *{t_clean}* PDR çekirdek listesinde henüz %5+ eşiği geçmedi. Güncel teknik ve akümülasyon analizi:\n\n" + card)
+                return
+        except Exception:
+            pass
         send_tg(f"🔍 *{t_clean}* için kayıtlı PDR fon verisi taranıyor veya fon payı %5'in altında.")
-        return
-
-    lines = [
-        f"🏛 *{t_clean} ── KURUMSAL FON VE SAKLAMA DÖKÜMÜ* 🏛",
-        f"────────────────────────────",
-        f"📊 *FON BAZINDA TAŞINAN LOT & AĞIRLIK:*"
-    ]
-    for f in data["fonlar"]:
-        lines.append(f"• *{f['fon']}:* `{f['lot']}` ({f['agirlik']}) | Maliyet Ref: `{f['maliyet']}`")
-        
-    lines.extend([
-        f"────────────────────────────",
-        f"🔒 *Toplam Fon Kilitlenmesi:* `{data['toplam_lot']}`",
-        f"📈 *Fiili Dolaşım Kilit Oranı:* `{data['kilit_orani']}`",
-        f"────────────────────────────",
-        f"🕵️‍♂️ *VİRMAN & SAKLAMA ANALİZİ:*",
-        f"{data['virman']}",
-        f"────────────────────────────",
-        f"💡 *Not:* Resmi Takasbank ve PDR denetiminden geçen net saklama verisidir."
-    ])
-    send_tg("\n".join(lines))
 
 def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     if df.empty or len(df) < 15:
@@ -177,15 +205,9 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     high_52w = float(df['High'].max())
     prim_52w = current_price / low_52w if low_52w > 0 else 1.0
 
-    if prim_52w > 1.45:
-        return {"score": 0, "phase": "AŞIRI PRİMLİ / TEPE RİSKİ"}
-
     high_20d = float(df['High'].tail(min(len(df), 20)).max())
     low_20d = float(df['Low'].tail(min(len(df), 20)).min())
     range_pct = ((high_20d - low_20d) / low_20d) * 100 if low_20d > 0 else 0
-
-    if range_pct > 16.0:
-        return {"score": 0, "phase": "VOLATİLİTE YÜKSEK"}
 
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
@@ -202,7 +224,6 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
 
     ema_20 = float(df['Close'].ewm(span=min(len(df), 20), adjust=False).mean().iloc[-1])
     ema_50 = float(df['Close'].ewm(span=min(len(df), 50), adjust=False).mean().iloc[-1])
-    above_ema20 = current_price >= ema_20
 
     score = 60
     reasons = []
@@ -210,16 +231,18 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     if prim_52w <= 1.25:
         score += 20
         reasons.append(f"Tam dipte (52H: {prim_52w:.2f}x)")
-    else:
+    elif prim_52w <= 1.45:
         score += 10
         reasons.append(f"Taban seviyesinde ({prim_52w:.2f}x)")
+    else:
+        reasons.append(f"Primli seviye ({prim_52w:.2f}x)")
 
     if range_pct <= 9.0:
         score += 20
         reasons.append(f"Kuvvetli dar bant sıkışması (%{range_pct:.1f})")
-    else:
+    elif range_pct <= 16.0:
         score += 10
-        reasons.append(f"Yatay konsolidasyon (%{range_pct:.1f})")
+        reasons.append(f"Konsolidasyon (%{range_pct:.1f})")
 
     if current_cmf > 0.05:
         score += 10
@@ -230,8 +253,8 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     else:
         cmf_status = f"{current_cmf:.2f} (Nötr)"
 
-    phase = "🔥 YATAYDAN DİKEYE GEÇİŞ (HAZIRLIK TAMAM)" if score >= 80 else "⏳ TABANDA SESSİZ MAL TOPLAMA"
-    action = "GİRİŞ / İLK KADEME ALIM" if score >= 80 else "DÜŞÜŞTE DESTEKTEN TOPLA"
+    phase = "🔥 YATAYDAN DİKEYE GEÇİŞ (HAZIRLIK TAMAM)" if score >= 80 else ("⏳ TABANDA SESSİZ MAL TOPLAMA" if score >= 60 else "⚪ DÜZELTME / ARA BÖLGE")
+    action = "GİRİŞ / İLK KADEME ALIM" if score >= 80 else ("DÜŞÜŞTE DESTEKTEN TOPLA" if score >= 60 else "İZLEMEDE KAL")
 
     stop_loss = round(current_price * 0.93, 2)
     target_1 = round(current_price * 1.25, 2)
@@ -264,8 +287,8 @@ def calculate_pre_pump_readiness(df: pd.DataFrame) -> dict:
     }
 
 def format_rich_stock_card(ticker: str, data: dict) -> str:
-    score = data["score"]
-    badge = "🔥" if score >= 80 else ("⏳" if score >= 65 else "⚪")
+    score = data.get("score", 60)
+    badge = "🔥" if score >= 80 else ("⏳" if score >= 60 else "⚪")
     
     lines = [
         f"{badge} *{ticker}* ── *HAZIRLIK SKORU: %{score}*",
@@ -273,7 +296,7 @@ def format_rich_stock_card(ticker: str, data: dict) -> str:
         f"📊 *1. AKÜMÜLASYON & PARA AKIŞI:*",
         f"• Para Girişi (CMF): `{data.get('cmf_str', 'Nötr')}`",
         f"• RSI (14G): `{data.get('rsi', 50):.1f} (Soğumuş/Taban)`",
-        f"• 52H Dip Durumu: `{data.get('low_52w', 0):.2f} TL ({data.get('prim_52w', 1.0):.2f}x - Dipte)`",
+        f"• 52H Dip Durumu: `{data.get('low_52w', 0):.2f} TL ({data.get('prim_52w', 1.0):.2f}x)`",
         f"────────────────────────────",
         f"🎯 *2. WYCKOFF SIKIŞMA VE TEKNİK YAPI:*",
         f"• Güncel Fiyat: `{data.get('price', 0):.2f} TL`",
@@ -317,7 +340,7 @@ def run_watchlist_scan_async():
                     df_t = batch_data[sym].dropna()
                     if not df_t.empty and len(df_t) >= 15:
                         res = calculate_pre_pump_readiness(df_t)
-                        if res.get("score", 0) >= 60:
+                        if res.get("prim_52w", 99) <= 1.45 and res.get("score", 0) >= 60:
                             results.append({"ticker": ticker, **res})
             except Exception:
                 pass
@@ -390,7 +413,7 @@ def parse_disclosure_data(d):
 
 def bot_worker():
     print("🚀 BIST Smart Money Worker Başlatıldı.")
-    send_tg("🟢 *BIST SMART MONEY & FON SAKLAMA SİSTEMİ AKTİF*\n\n• `/tara` : Taban sıkışması biten hisseleri listeler.\n• `/fon HISSE` (Örn: `/fon MPARK` veya `/fon TRMET`) : Fonda taşınan lot ve virman dökümünü verir!")
+    send_tg("🟢 *BIST SMART MONEY & FON SAKLAMA SİSTEMİ AKTİF*\n\n• `/tara` : Taban sıkışması biten hisseleri listeler.\n• `/fon LOGO` veya `/fon MPARK` : Fonda taşınan lot ve virman dökümünü verir!")
     
     seen = set()
     last_update_id = None
@@ -408,14 +431,14 @@ def bot_worker():
                 if text_lower.startswith("/fon") or text_lower.startswith("fon"):
                     parts = text.split()
                     if len(parts) >= 2:
-                        target_ticker = parts
+                        target_ticker = parts.strip()
                         threading.Thread(target=send_fund_holdings, args=(target_ticker,), daemon=True).start()
                     else:
-                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: `/fon MPARK` veya `/fon TRMET`")
+                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: `/fon LOGO` veya `/fon MPARK`")
                 elif text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
                     threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
                 elif text_lower in ["/start", "start", "/yardim"]:
-                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Yataydan dikeye geçiş taban hisselerini listeler.\n• `/fon HISSE` : Hissedeki fon lotlarını ve virman durumunu döker (Örn: `/fon MPARK`).\n• Canlı KAP alımları otomatik gelir.")
+                    send_tg("📌 *KOMUTLAR:*\n• `/tara` : Yataydan dikeye geçiş taban hisselerini listeler.\n• `/fon HISSE` : Hissedeki fon lotlarını ve virman durumunu döker (Örn: `/fon LOGO`).\n• Canlı KAP alımları otomatik gelir.")
 
             now = time.time()
             if now - last_kap_check >= 60:
@@ -459,3 +482,4 @@ t.start()
 
 if __name__ == "__main__":
     run_web_server()
+EOF
