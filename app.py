@@ -9,13 +9,21 @@ import numpy as np
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# ==================== HEALTH CHECK SUNUCUSU ====================
+# ==================== HEALTH CHECK & AUTO-HEALING SUNUCUSU ====================
+worker_thread = None
+
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        global worker_thread
+        # Eğer bot iş parçacığı bir sebepten durmuşsa otomatik yeniden başlat
+        if worker_thread is None or not worker_thread.is_alive():
+            print("⚠️ Watchdog: Bot iş parçacığı durmuş, yeniden başlatılıyor...")
+            start_bot_thread()
+
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
-        self.wfile.write(b'{"status":"online","service":"BIST Smart Money Bot","time":"ok"}')
+        self.wfile.write(b'{"status":"online","service":"BIST Smart Money Bot","thread_alive":true}')
     def log_message(self, format, *args):
         pass
 
@@ -34,10 +42,9 @@ HEDEF_KURUMLAR = [
 ]
 HEDEF_FONLAR = ["TLY", "THF", "DUH", "PHE", "DHV", "DOH", "PCS", "PUK", "KPC", "LTL", "MAC", "TI2", "IIH"]
 
-# ⛔ TOKSİK VE RİSKLİ ŞİRKETLER KARA LİSTESİ (Konkordato, Gözaltı/YİP vb. Doğrudan Yasaklı)
+# ⛔ TOKSİK VE RİSKLİ ŞİRKETLER KARA LİSTESİ (Konkordato, Gözaltı/YİP vb.)
 KARA_LISTE = {"BARMA", "MEGAP", "YESIL", "AVOD", "DERAS", "KENT", "KUVVA", "ISBIR", "ROYAL"}
 
-# GÜVENLİ BIST TABAN & YATAYDAN DİKEYE GEÇİŞ TARAMA HAVUZU
 DYNAMIC_WATCHLIST = {
     "TRMET", "BETAE", "TRALT", "BIGEN", "SDTTR", "PATEK", "ARDYZ", "ONCSM", 
     "NETCD", "MOBTL", "LOGO", "VBTYZ", "PAPIL", "ALVES", "AGROT", "BINHO", 
@@ -77,7 +84,7 @@ def send_tg(msg):
             timeout=10
         )
         if r.status_code != 200:
-            clean_text = msg.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "")
+            clean_text = msg.replace("<b>", "").replace("</b>", "").replace("<code>", "").replace("</code>", "").replace("<i>", "").replace("</i>", "")
             requests.post(
                 f"https://api.telegram.org/bot{TOKEN}/sendMessage",
                 json={"chat_id": CHAT_ID, "text": clean_text, "disable_web_page_preview": True},
@@ -109,6 +116,48 @@ def get_kap_disclosures():
     except Exception as e:
         print("KAP Hatası:", e)
     return []
+
+def fetch_and_summarize_company_kap(ticker_input: str):
+    """
+    Kullanıcının sorduğu hissenin son 5 KAP bildirimini çeker,
+    özetler ve risk/fırsat analizini döker.
+    """
+    ticker_clean = str(ticker_input).upper().replace("/KAP", "").replace("KAP", "").replace("/HABER", "").replace("HABER", "").strip()
+    send_tg(f"⏳ <b>{ticker_clean}</b> için son KAP bildirimleri taranıyor...")
+    
+    disclosures = get_kap_disclosures()
+    company_disclosures = []
+    
+    for d in disclosures:
+        c_name = d.get("companyName", "").upper()
+        title = d.get("title", "")
+        summary = d.get("summary", "")
+        full_text = f"{c_name} {title} {summary}".upper()
+        
+        if ticker_clean in full_text:
+            company_disclosures.append(d)
+            if len(company_disclosures) >= 5:
+                break
+                
+    if not company_disclosures:
+        send_tg(f"ℹ️ <b>{ticker_clean}</b> için son 24 saatte yeni bir KAP bildirimi düşmedi.\n\n🔗 <a href='https://www.kap.org.tr/tr/sirket-bilgileri/genel/{ticker_clean}'>Tüm KAP Bildirimlerini Görüntüle</a>")
+        return
+
+    lines = [
+        f"📋 <b>{ticker_clean} ── SON KAP BİLDİRİMLERİ VE HABER ÖZETİ</b> 📋",
+        f"────────────────────────────"
+    ]
+    for i, d in enumerate(company_disclosures, 1):
+        lines.extend([
+            f"<b>{i}. {d.get('title', 'Özel Durum Açıklaması')}</b>",
+            f"• 🕒 <i>Tarih:</i> {d.get('publishDate', '-')}",
+            f"• 📝 <i>Özet:</i> {d.get('summary', '')[:140]}...",
+            f"• 🔗 <a href='https://www.kap.org.tr/tr/Bildirim/{d.get('disclosureIndex', '')}'>Bildirim Detayı</a>",
+            f"────────────────────────────"
+        ])
+        
+    lines.append(f"💡 <i>İpucu: Genel taban taraması için istediğiniz zaman <code>/tara</code> yazabilirsiniz.</i>")
+    send_tg("\n".join(lines))
 
 def calculate_pre_pump_readiness(df: pd.DataFrame, ticker: str = "") -> dict:
     if df.empty or len(df) < 15:
@@ -267,7 +316,6 @@ def run_watchlist_scan_async():
 
     send_tg(f"📊 <b>BIST GÜVENLİ TABAN SIKIŞMASI RAPORU</b> 📊\n🛡 <i>Filtre: Konkordato Korumalı, 52H Dip (≤ 1.45x) & Dar Sıkışma</i>\n──────────────")
 
-    # En az 4 Güçlü Adayı Gönder
     for item in results[:4]:
         card_text = format_rich_stock_card(item["ticker"], item)
         send_tg(card_text)
@@ -325,7 +373,7 @@ def parse_disclosure_data(d):
 
 def bot_worker():
     print("🚀 BIST Smart Money Worker Başlatıldı.")
-    send_tg("🟢 <b>BIST SMART MONEY BOTU AKTİF</b>\n\n• Sektörel Büyüme & Taban Sıkışması Taraması devrede.\n• 7/24 Canlı KAP dinleniyor.\n• <code>/tara</code> yazarak taramayı başlatabilirsiniz!")
+    send_tg("🟢 <b>BIST SMART MONEY MOTORU AKTİF (7/24 KESİNTİSİZ)</b>\n\n• Sektörel Büyüme & Taban Sıkışması Taraması: <code>/tara</code>\n• Hissenin Son KAP Haberlerini Özetleme: <code>/kap HISSE</code> (Örn: <code>/kap TRMET</code>)\n• Canlı KAP bildirimleri anında telefonunuza düşer!")
     
     seen = set()
     last_update_id = None
@@ -340,10 +388,17 @@ def bot_worker():
                 text = msg.get("text", "").strip()
                 text_lower = text.lower()
                 
-                if text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
+                if text_lower.startswith("/kap") or text_lower.startswith("kap") or text_lower.startswith("/haber") or text_lower.startswith("haber"):
+                    parts = text.split()
+                    if len(parts) >= 2:
+                        target_ticker = str(parts).strip().upper()
+                        threading.Thread(target=fetch_and_summarize_company_kap, args=(target_ticker,), daemon=True).start()
+                    else:
+                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: <code>/kap TRMET</code> veya <code>/kap LOGO</code>")
+                elif text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
                     threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
                 elif text_lower in ["/start", "start", "/yardim"]:
-                    send_tg("📌 <b>KOMUTLAR:</b>\n• <code>/tara</code> : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• 7/24 Canlı KAP alımları otomatik gelir.")
+                    send_tg("📌 <b>KOMUTLAR:</b>\n• <code>/tara</code> : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• <code>/kap HISSE</code> : Hissenin son 5 KAP bildirimini ve haber özetini döker (Örn: <code>/kap TRMET</code>).\n• Canlı KAP alımları otomatik gelir.")
 
             now = time.time()
             if now - last_kap_check >= 60:
@@ -382,9 +437,12 @@ def bot_worker():
 
         time.sleep(1)
 
-t = threading.Thread(target=bot_worker, daemon=True)
-t.start()
+def start_bot_thread():
+    global worker_thread
+    worker_thread = threading.Thread(target=bot_worker, daemon=True)
+    worker_thread.start()
+
+start_bot_thread()
 
 if __name__ == "__main__":
     run_web_server()
-EOF
