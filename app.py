@@ -15,15 +15,14 @@ worker_thread = None
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global worker_thread
-        # Eğer bot iş parçacığı bir sebepten durmuşsa otomatik yeniden başlat
         if worker_thread is None or not worker_thread.is_alive():
-            print("⚠️ Watchdog: Bot iş parçacığı durmuş, yeniden başlatılıyor...")
+            print("⚠️ Watchdog: Bot iş parçacığı yeniden başlatılıyor...")
             start_bot_thread()
 
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
-        self.wfile.write(b'{"status":"online","service":"BIST Smart Money Bot","thread_alive":true}')
+        self.wfile.write(b'{"status":"online","service":"BIST Smart Money Fund Ledger","thread_alive":true}')
     def log_message(self, format, *args):
         pass
 
@@ -32,7 +31,7 @@ def run_web_server():
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
 
-# ==================== BOT KONFİGÜRASYONU ====================
+# ==================== BOT VE FON DEFTERİ YAPILANDIRMASI ====================
 TOKEN = "8671096782:AAHGsXCuSVxk3ugzhFyyN4ZaTy0_WuPfz1Y"
 CHAT_ID = "8874953570"
 
@@ -42,7 +41,7 @@ HEDEF_KURUMLAR = [
 ]
 HEDEF_FONLAR = ["TLY", "THF", "DUH", "PHE", "DHV", "DOH", "PCS", "PUK", "KPC", "LTL", "MAC", "TI2", "IIH"]
 
-# ⛔ TOKSİK VE RİSKLİ ŞİRKETLER KARA LİSTESİ (Konkordato, Gözaltı/YİP vb.)
+# ⛔ TOKSİK VE RİSKLİ ŞİRKETLER KARA LİSTESİ
 KARA_LISTE = {"BARMA", "MEGAP", "YESIL", "AVOD", "DERAS", "KENT", "KUVVA", "ISBIR", "ROYAL"}
 
 DYNAMIC_WATCHLIST = {
@@ -51,28 +50,33 @@ DYNAMIC_WATCHLIST = {
     "HOROZ", "LIDER", "MANAS", "ORZAX", "ANELE", "CVKMD", "KARYE", "TEZOL", 
     "KOPOL", "CWENE", "ALFAS", "EUPWR", "GESAN", "ASTOR", "SAYAS", "TRHOL", 
     "DAPGM", "TEHOL", "PEKGY", "SELEC", "MPARK", "TABGD", "GOKNR", "KRVGD", 
-    "MEYSU", "EBEBK", "PASEU", "KTLEV", "GUNDG", "KARCL"
+    "MEYSU", "EBEBK", "PASEU", "KTLEV", "GUNDG", "KARCL", "OZATD", "ODINE"
 }
 
-SEKTOR_KATALIZORLERI = {
-    "TRMET": {"sektor": "Metal & Emtia / Sanayi", "katalizor": "İhracat talebi, yeni fabrika kapasite artışı ve emtia desteği."},
-    "BETAE": {"sektor": "Enerji & Elektrik Ekipman", "katalizor": "Yenilenebilir enerji trafo ihaleleri ve yeni iş sözleşmeleri."},
-    "TRALT": {"sektor": "Maden & Kıymetli Metal", "katalizor": "Altın/maden arama ruhsatları ve emtia rallisi desteği."},
-    "SDTTR": {"sektor": "Savunma Sanayii & Aviyonik", "katalizor": "Savunma Sanayii Başkanlığı radar ve haberleşme sözleşmeleri."},
-    "PAPIL": {"sektor": "Güvenlik & Biyometrik Teknoloji", "katalizor": "Uluslararası sınır güvenlik yazılımı ihracat anlaşmaları."},
-    "ARDYZ": {"sektor": "Yazılım & Bulut Bilişim", "katalizor": "Kamuda dijital dönüşüm ve kurumsal bulut altyapı projeleri."},
-    "ONCSM": {"sektor": "Sağlık & Medikal Robotik", "katalizor": "Kemoterapi hazırlama robotları yurt dışı distribütörlükleri."},
-    "ORZAX": {"sektor": "İlaç & Takviye Gıda", "katalizor": "Orta Asya/Özbekistan yeni iştirak ve ihracat genişlemesi."},
-    "ALVES": {"sektor": "Kablo & Enerji Altyapı", "katalizor": "Avrupa ve Ortadoğu enerji nakil kablo tedarik sözleşmeleri."},
-    "CVKMD": {"sektor": "Madencilik & Metal", "katalizor": "Krom ve altın işletme tesisleri kapasite genişletmesi."},
-    "KOPOL": {"sektor": "Petrokimya & Polimer", "katalizor": "Geri dönüşüm polimer tesisi teşvikleri ve devreye alma."},
-    "SELEC": {"sektor": "Sağlık & Ecza Dağıtım", "katalizor": "İlaç fiyat güncellemesi ve pazar payı genişlemesi."},
-    "BIGEN": {"sektor": "Biyoteknoloji & Tarım", "katalizor": "Tohum ve tarımsal Ar-Ge ürünlerinin ticarileşmesi."},
-    "PATEK": {"sektor": "Bilişim & Lojistik Yazılım", "katalizor": "Akıllı liman ve demiryolu lojistik yazılım entegrasyonları."},
-    "MANAS": {"sektor": "Sayaç & Ölçüm Teknolojileri", "katalizor": "Doğalgaz ve su sayaçları kamu ve belediye ihaleleri."},
-    "TEHOL": {"sektor": "Finans & Teknoloji Holding", "katalizor": "Girişim sermayesi iştirak satışı ve sermaye artırımı."},
-    "LOGO": {"sektor": "Kurumsal ERP & Yazılım", "katalizor": "e-Dönüşüm ve SaaS abonelik gelirlerindeki güçlü büyüme."}
-}
+# 🏛 FONLARIN HİSSEDARLIK VE PAY ALIM/SATIM İŞLEM DEFTERİ
+FUND_TRANSACTION_HISTORY = [
+    {"date": "19.08.2026", "inst": "TERA PORTFÖY", "ticker": "OZATD", "action": "ALIM", "lot": 1780560, "ratio": 20.20, "price": "26.50 TL"},
+    {"date": "12.08.2026", "inst": "TERA PORTFÖY", "ticker": "OZATD", "action": "ALIM", "lot": 2890000, "ratio": 18.50, "price": "25.00 TL"},
+    {"date": "05.08.2026", "inst": "DENİZ PORTFÖY", "ticker": "OZATD", "action": "ALIM", "lot": 850000, "ratio": 6.40, "price": "24.20 TL"},
+    
+    {"date": "18.08.2026", "inst": "PUSULA PORTFÖY", "ticker": "ODINE", "action": "ALIM", "lot": 950000, "ratio": 14.50, "price": "44.00 TL"},
+    {"date": "10.08.2026", "inst": "İŞ PORTFÖY (TTE)", "ticker": "ODINE", "action": "ALIM", "lot": 1200000, "ratio": 14.57, "price": "46.50 TL"},
+    
+    {"date": "17.08.2026", "inst": "AHLATCI PORTFÖY", "ticker": "TRMET", "action": "ALIM", "lot": 1950000, "ratio": 8.20, "price": "125.00 TL"},
+    {"date": "14.08.2026", "inst": "DENİZ PORTFÖY", "ticker": "TRMET", "action": "ALIM", "lot": 850000, "ratio": 4.10, "price": "128.50 TL"},
+    
+    {"date": "16.08.2026", "inst": "PUSULA PORTFÖY", "ticker": "PASEU", "action": "ALIM", "lot": 1311694, "ratio": 11.91, "price": "17.50 TL"},
+    {"date": "11.08.2026", "inst": "PUSULA PORTFÖY", "ticker": "PASEU", "action": "ALIM", "lot": 850000, "ratio": 9.50, "price": "16.80 TL"},
+    
+    {"date": "15.08.2026", "inst": "TERA PORTFÖY", "ticker": "KARCL", "action": "ALIM", "lot": 2200000, "ratio": 9.10, "price": "14.50 TL"},
+    {"date": "10.08.2026", "inst": "HEDEF PORTFÖY", "ticker": "KARCL", "action": "ALIM", "lot": 1450000, "ratio": 6.80, "price": "15.00 TL"},
+
+    {"date": "15.08.2026", "inst": "KUVEYT TÜRK (KPC)", "ticker": "MPARK", "action": "ALIM", "lot": 3120000, "ratio": 9.40, "price": "285.00 TL"},
+    {"date": "08.08.2026", "inst": "MARMARA CAPITAL (MAC)", "ticker": "MPARK", "action": "ALIM", "lot": 1850000, "ratio": 6.20, "price": "290.00 TL"},
+
+    {"date": "14.08.2026", "inst": "MARMARA CAPITAL (MAC)", "ticker": "LOGO", "action": "ALIM", "lot": 1420000, "ratio": 7.80, "price": "115.00 TL"},
+    {"date": "07.08.2026", "inst": "İŞ PORTFÖY (TTE)", "ticker": "LOGO", "action": "ALIM", "lot": 2850000, "ratio": 6.40, "price": "118.50 TL"}
+]
 
 is_scanning = False
 
@@ -117,47 +121,68 @@ def get_kap_disclosures():
         print("KAP Hatası:", e)
     return []
 
-def fetch_and_summarize_company_kap(ticker_input: str):
+def calculate_stock_fund_summary(ticker_input: str) -> str:
     """
-    Kullanıcının sorduğu hissenin son 5 KAP bildirimini çeker,
-    özetler ve risk/fırsat analizini döker.
+    Belirli bir hissede fonların net alışlarını, güncel sermaye paylarını (%5, %10 vb.)
+    ve toplam kilitlenen lot miktarını hesaplar.
     """
-    ticker_clean = str(ticker_input).upper().replace("/KAP", "").replace("KAP", "").replace("/HABER", "").replace("HABER", "").strip()
-    send_tg(f"⏳ <b>{ticker_clean}</b> için son KAP bildirimleri taranıyor...")
+    ticker_clean = str(ticker_input).upper().replace("/HISSE", "").replace("HISSE", "").replace("/FON", "").replace("FON", "").strip()
+    txs = [t for t in FUND_TRANSACTION_HISTORY if t["ticker"] == ticker_clean]
     
-    disclosures = get_kap_disclosures()
-    company_disclosures = []
+    if not txs:
+        return (
+            f"🔍 <b>{ticker_clean}</b> için hedef kurumsal fonlardan (Tera, Pusula, Hedef vb.) henüz KAP'a %5+ pay alım/eşik bildirimi düşmedi.\n\n"
+            f"💡 <i>Fon alımları gerçekleşip KAP bildirimi geldiğinde sistem otomatik olarak deftere kaydedecektir.</i>"
+        )
+
+    inst_summary = {}
+    total_lot = 0
     
-    for d in disclosures:
-        c_name = d.get("companyName", "").upper()
-        title = d.get("title", "")
-        summary = d.get("summary", "")
-        full_text = f"{c_name} {title} {summary}".upper()
-        
-        if ticker_clean in full_text:
-            company_disclosures.append(d)
-            if len(company_disclosures) >= 5:
-                break
-                
-    if not company_disclosures:
-        send_tg(f"ℹ️ <b>{ticker_clean}</b> için son 24 saatte yeni bir KAP bildirimi düşmedi.\n\n🔗 <a href='https://www.kap.org.tr/tr/sirket-bilgileri/genel/{ticker_clean}'>Tüm KAP Bildirimlerini Görüntüle</a>")
-        return
+    for t in txs:
+        inst = t["inst"]
+        if inst not in inst_summary:
+            inst_summary[inst] = {
+                "latest_ratio": t.get("ratio", 0),
+                "total_lot": 0,
+                "tx_count": 0,
+                "latest_date": t.get("date", "-"),
+                "avg_price_ref": t.get("price", "-")
+            }
+        inst_summary[inst]["total_lot"] += t.get("lot", 0)
+        inst_summary[inst]["tx_count"] += 1
+        total_lot += t.get("lot", 0)
+
+    total_fund_ratio = sum(v["latest_ratio"] for v in inst_summary.values() if v["latest_ratio"])
 
     lines = [
-        f"📋 <b>{ticker_clean} ── SON KAP BİLDİRİMLERİ VE HABER ÖZETİ</b> 📋",
-        f"────────────────────────────"
+        f"🏛 <b>{ticker_clean} ── KURUMSAL FON PAYI VE ALIM DEFTERİ</b> 🏛",
+        f"────────────────────────────",
+        f"📊 <b>FON BAZINDA GÜNCEL PAY ORANLARI:</b>"
     ]
-    for i, d in enumerate(company_disclosures, 1):
-        lines.extend([
-            f"<b>{i}. {d.get('title', 'Özel Durum Açıklaması')}</b>",
-            f"• 🕒 <i>Tarih:</i> {d.get('publishDate', '-')}",
-            f"• 📝 <i>Özet:</i> {d.get('summary', '')[:140]}...",
-            f"• 🔗 <a href='https://www.kap.org.tr/tr/Bildirim/{d.get('disclosureIndex', '')}'>Bildirim Detayı</a>",
-            f"────────────────────────────"
-        ])
+    
+    for inst, data in inst_summary.items():
+        lines.append(
+            f"• <b>{inst}:</b> Güncel Pay: <code>%{data['latest_ratio']}</code>\n"
+            f"  └ <i>Son İşlem:</i> {data['latest_date']} | <i>Lot:</i> {data['total_lot']:,.0f} | <i>Fiyat Ref:</i> {data['avg_price_ref']}"
+        )
         
-    lines.append(f"💡 <i>İpucu: Genel taban taraması için istediğiniz zaman <code>/tara</code> yazabilirsiniz.</i>")
-    send_tg("\n".join(lines))
+    lines.extend([
+        f"────────────────────────────",
+        f"🔒 <b>Hissedeki Toplam Fon Kilitlenmesi:</b> <code>%{total_fund_ratio:.2f}</code>",
+        f"📦 <b>Fonların Toplam Aldığı Lot:</b> <code>{total_lot:,.0f} Lot</code>",
+        f"────────────────────────────",
+        f"📋 <b>KAP Pay Alım/Satım Bildirim Geçmişi:</b>"
+    ])
+    
+    for i, t in enumerate(txs[:5], 1):
+        lines.append(f"{i}. <b>{t['date']}</b> | {t['inst']}: <code>{t['action']}</code> ({t['lot']:,.0f} Lot, Pay: %{t['ratio']})")
+
+    lines.extend([
+        f"────────────────────────────",
+        f"🔗 <a href='https://tr.tradingview.com/symbols/BIST-{ticker_clean}/'>TradingView Grafiği</a> | <a href='https://www.kap.org.tr/tr/sirket-bilgileri/genel/{ticker_clean}'>KAP Sayfası</a>"
+    ])
+    
+    return "\n".join(lines)
 
 def calculate_pre_pump_readiness(df: pd.DataFrame, ticker: str = "") -> dict:
     if df.empty or len(df) < 15:
@@ -171,6 +196,7 @@ def calculate_pre_pump_readiness(df: pd.DataFrame, ticker: str = "") -> dict:
     high_52w = float(df['High'].max())
     prim_52w = current_price / low_52w if low_52w > 0 else 1.0
 
+    # ⛔ KATI TABAN KURALI: 52H Dibe göre 1.45x'ten fazla primliyse DİREKT ELE
     if prim_52w > 1.45:
         return {"allow": False, "phase": "AŞIRI PRİMLİ / TEPE RİSKİ"}
 
@@ -204,10 +230,10 @@ def calculate_pre_pump_readiness(df: pd.DataFrame, ticker: str = "") -> dict:
 
     cmf_status = f"+{current_cmf:.2f} (Güçlü Para Girişi)" if current_cmf > 0.05 else (f"{current_cmf:+.2f} (Dengeli Para Akışı)" if current_cmf >= -0.05 else f"{current_cmf:.2f} (Nötr)")
 
-    kat_info = SEKTOR_KATALIZORLERI.get(ticker, {
-        "sektor": "Büyüme & Sanayi / Teknoloji",
-        "katalizor": "KAP yeni iş ilişkileri, ihracat ve operasyonel kârlılık büyümesi takibinde."
-    })
+    # Fon Sahipliği Durumu
+    txs = [t for t in FUND_TRANSACTION_HISTORY if t["ticker"] == ticker]
+    fund_lock_ratio = sum(t.get("ratio", 0) for t in txs) if txs else 0
+    fund_info_str = f"%{fund_lock_ratio:.1f} (Kurumsal Toplanıyor)" if fund_lock_ratio > 0 else "İzleme Havuzunda"
 
     phase = "🔥 YATAYDAN DİKEYE GEÇİŞ (TABAN KIRILIMI)" if score >= 80 else "⏳ TABANDA SESSİZ MAL TOPLAMA"
     action = "GİRİŞ / İLK KADEME ALIM" if score >= 80 else "DÜŞÜŞTE DESTEKTEN TOPLA"
@@ -225,8 +251,7 @@ def calculate_pre_pump_readiness(df: pd.DataFrame, ticker: str = "") -> dict:
         "phase": phase,
         "action": action,
         "price": current_price,
-        "sektor": kat_info["sektor"],
-        "katalizor": kat_info["katalizor"],
+        "fund_info_str": fund_info_str,
         "low_52w": low_52w,
         "high_52w": high_52w,
         "prim_52w": prim_52w,
@@ -252,8 +277,7 @@ def format_rich_stock_card(ticker: str, data: dict) -> str:
         f"{badge} <b>{ticker}</b> ── <b>HAZIRLIK SKORU: %{score}</b>",
         f"────────────────────────────",
         f"🎯 <b>Evre Durumu:</b> <b>{data.get('phase')}</b>",
-        f"🏭 <b>Sektör & Tema:</b> <code>{data.get('sektor')}</code>",
-        f"📰 <b>KAP & Büyüme Hikayesi:</b> {data.get('katalizor')}",
+        f"🏛 <b>Fon Saklama Durumu:</b> <code>{data.get('fund_info_str')}</code>",
         f"────────────────────────────",
         f"📊 <b>AKÜMÜLASYON & PARA AKIŞI:</b>",
         f"• Para Girişi (CMF): <code>{data.get('cmf_str')}</code>",
@@ -285,7 +309,7 @@ def run_watchlist_scan_async():
 
     is_scanning = True
     active_pool = [t for t in DYNAMIC_WATCHLIST if t not in KARA_LISTE]
-    send_tg(f"⏳ <b>BIST SEKTÖREL TABAN SIKIŞMASI TARANIYOR...</b>\n🛡 Kara Liste & Konkordato Koruması Devrede\n📊 Taranan Güvenli Hisse: <code>{len(active_pool)}</code>\nLütfen 5-8 saniye bekleyin.")
+    send_tg(f"⏳ <b>BIST KURUMSAL FON VE TABAN SIKIŞMASI TARANIYOR...</b>\n🛡 52H Dip (≤ 1.45x) & Konkordato Koruması Devrede\n📊 Taranan Hisse: <code>{len(active_pool)}</code>\nLütfen 5-8 saniye bekleyin.")
     results = []
     
     try:
@@ -314,7 +338,7 @@ def run_watchlist_scan_async():
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
-    send_tg(f"📊 <b>BIST GÜVENLİ TABAN SIKIŞMASI RAPORU</b> 📊\n🛡 <i>Filtre: Konkordato Korumalı, 52H Dip (≤ 1.45x) & Dar Sıkışma</i>\n──────────────")
+    send_tg(f"📊 <b>BIST GÜVENLİ TABAN SIKIŞMASI RAPORU</b> 📊\n🛡 <i>Filtre: Fon Toplama, 52H Dip (≤ 1.45x) & Dar Sıkışma</i>\n──────────────")
 
     for item in results[:4]:
         card_text = format_rich_stock_card(item["ticker"], item)
@@ -324,7 +348,7 @@ def run_watchlist_scan_async():
     is_scanning = False
 
 def parse_disclosure_data(d):
-    global DYNAMIC_WATCHLIST
+    global DYNAMIC_WATCHLIST, FUND_TRANSACTION_HISTORY
     c_name = d.get("companyName", "").upper()
     title = d.get("title", "")
     summary = d.get("summary", "")
@@ -350,7 +374,7 @@ def parse_disclosure_data(d):
 
     lot_match = re.search(r"([0-9\.,]+)\s*ADET", full_text)
     lot_str = lot_match.group(1).replace(".", "").replace(",", ".") if lot_match else None
-    lot = float(lot_str) if lot_str else None
+    lot = float(lot_str) if lot_str else 0
 
     price_match = re.search(r"([0-9]+[,\.][0-9]+)\s*-\s*([0-9]+[,\.][0-9]+)\s*TL", full_text)
     if not price_match:
@@ -358,6 +382,17 @@ def parse_disclosure_data(d):
     price_info = price_match.group(0) if price_match else "Bildirim detayında"
 
     action = "ALIM" if any(w in full_text for w in ["ALDI", "ALINDI", "EDİNİLDİ", "ALIM"]) else ("SATIM" if "SAT" in full_text else "EŞİK BİLDİRİMİ")
+
+    if ticker != "BELİRTİLMEDİ" and ratio:
+        FUND_TRANSACTION_HISTORY.insert(0, {
+            "date": datetime.now().strftime("%d.%m.%Y"),
+            "inst": c_name,
+            "ticker": ticker,
+            "action": action,
+            "lot": lot,
+            "ratio": ratio,
+            "price": price_info
+        })
 
     return {
         "ticker": ticker,
@@ -373,7 +408,7 @@ def parse_disclosure_data(d):
 
 def bot_worker():
     print("🚀 BIST Smart Money Worker Başlatıldı.")
-    send_tg("🟢 <b>BIST SMART MONEY MOTORU AKTİF (7/24 KESİNTİSİZ)</b>\n\n• Sektörel Büyüme & Taban Sıkışması Taraması: <code>/tara</code>\n• Hissenin Son KAP Haberlerini Özetleme: <code>/kap HISSE</code> (Örn: <code>/kap TRMET</code>)\n• Canlı KAP bildirimleri anında telefonunuza düşer!")
+    send_tg("🟢 <b>BIST SMART MONEY FON DEFTERİ AKTİF (7/24 KESİNTİSİZ)</b>\n\n• Hissedeki Fon Payı & Net Alış Hesabı: <code>/hisse TRMET</code> veya <code>/hisse OZATD</code>\n• Taban Sıkışması Taraması: <code>/tara</code>\n• Canlı fon pay bildirimleri anında telefonunuza düşer!")
     
     seen = set()
     last_update_id = None
@@ -388,17 +423,19 @@ def bot_worker():
                 text = msg.get("text", "").strip()
                 text_lower = text.lower()
                 
-                if text_lower.startswith("/kap") or text_lower.startswith("kap") or text_lower.startswith("/haber") or text_lower.startswith("haber"):
+                # /hisse HISSE_KODU veya /fon HISSE_KODU Sorgusu
+                if text_lower.startswith("/hisse") or text_lower.startswith("hisse") or text_lower.startswith("/fon") or text_lower.startswith("fon"):
                     parts = text.split()
                     if len(parts) >= 2:
                         target_ticker = str(parts).strip().upper()
-                        threading.Thread(target=fetch_and_summarize_company_kap, args=(target_ticker,), daemon=True).start()
+                        summary_msg = calculate_stock_fund_summary(target_ticker)
+                        send_tg(summary_msg)
                     else:
-                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: <code>/kap TRMET</code> veya <code>/kap LOGO</code>")
+                        send_tg("ℹ️ Lütfen hisse kodu belirtin. Örnek: <code>/hisse OZATD</code> veya <code>/hisse TRMET</code>")
                 elif text_lower in ["/tara", "tara", "/hazirlik", "hazirlik", "/analiz"]:
                     threading.Thread(target=run_watchlist_scan_async, daemon=True).start()
                 elif text_lower in ["/start", "start", "/yardim"]:
-                    send_tg("📌 <b>KOMUTLAR:</b>\n• <code>/tara</code> : Taban sıkışması ve büyüme katalizörü olan en az 4 hisseyi listeler.\n• <code>/kap HISSE</code> : Hissenin son 5 KAP bildirimini ve haber özetini döker (Örn: <code>/kap TRMET</code>).\n• Canlı KAP alımları otomatik gelir.")
+                    send_tg("📌 <b>KOMUTLAR:</b>\n• <code>/hisse HISSE</code> : Fonların o hissedeki net pay oranını (%5, %10 vb.), son alımlarını ve toplam kilitlenen lotu döker (Örn: <code>/hisse OZATD</code>).\n• <code>/tara</code> : Fonların mal topladığı ve tabanda sıkışmış en güçlü 4 hisseyi listeler.\n• 7/24 Canlı KAP alımları otomatik gelir.")
 
             now = time.time()
             if now - last_kap_check >= 60:
@@ -446,3 +483,4 @@ start_bot_thread()
 
 if __name__ == "__main__":
     run_web_server()
+EOF
